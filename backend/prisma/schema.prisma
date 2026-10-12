@@ -1,0 +1,44 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String          @id @default(cuid())
+  email        String          @unique
+  name         String?
+  passwordHash String
+  createdAt    DateTime        @default(now())
+  progress     Progress?
+  entries      PracticeEntry[]
+}
+
+model Progress {
+  userId      String   @id
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  xp          Int      @default(0)
+  streak      Int      @default(0)
+  longest     Int      @default(0)
+  messages    Int      @default(0)
+  lastDay     String? // UTC date, YYYY-MM-DD
+  premium     Boolean  @default(false)
+  giftClaimed Boolean  @default(false)
+  language    String   @default("Spanish")
+  level       String   @default("Beginner")
+  updatedAt   DateTime @updatedAt
+}
+
+model PracticeEntry {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  day       String // UTC date, YYYY-MM-DD
+  text      String
+  createdAt DateTime @default(now())
+
+  @@index([userId, day])
+}
