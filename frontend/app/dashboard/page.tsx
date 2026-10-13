@@ -9,6 +9,8 @@ import { Modal, Select, ErrorText } from "@/components/Modal";
 import { ChatPanel } from "@/components/ChatPanel";
 import { GeneratePanel } from "@/components/GeneratePanel";
 import { PhotoPanel } from "@/components/PhotoPanel";
+import { PracticeTimer } from "@/components/PracticeTimer";
+import { ProgressView } from "@/components/ProgressView";
 import { api, clearToken, getToken, type Progress } from "@/lib/api";
 import { LANGUAGES, LEVELS, MODES, type Mode } from "@/lib/modes";
 
@@ -200,25 +202,17 @@ export default function Dashboard() {
               </div>
             </aside>
           </div>
+        ) : active === "progress" ? (
+          <ProgressView s={s} onOpenFeedback={() => setFeedbackOpen(true)} />
         ) : (
           <div className="mx-auto max-w-xl pt-10">
             <h1 className="text-lg font-semibold">{NAV.find((n) => n.id === active)?.label}</h1>
-            {active === "progress" ? (
-              <dl className="mt-6 grid grid-cols-2 gap-4">
-                {([["Level", level], ["Total XP", s.xp], ["Practice messages", s.messages], ["Longest streak", `${s.longest} days`]] as const).map(([k, v]) => (
-                  <div key={k} className="rounded-2xl border border-white/5 bg-[#1f1f27] p-5">
-                    <dt className="text-sm text-white/60">{k}</dt>
-                    <dd className="mt-1 text-2xl font-semibold">{v}</dd>
-                  </div>
-                ))}
-              </dl>
-            ) : (
-              <p className="mt-4 text-white/60">This section isn't built yet. Pick Home to practice.</p>
-            )}
+            <p className="mt-4 text-white/60">This section isn't built yet. Pick Home to practice.</p>
           </div>
         )}
       </main>
 
+      {openMode && <PracticeTimer onSnapshot={setS} />}
       {openMode && ["chat", "call", "roleplay", "characters", "debate"].includes(openMode.id) && (
         <ChatPanel mode={openMode.id as any} title={openMode.title} learner={learner} onPractice={practice} onClose={() => setOpenMode(null)} />
       )}

@@ -1,5 +1,5 @@
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
-const TOKEN_KEY = "talkpal-token";
+const TOKEN_KEY = "talkmate-token";
 
 export const getToken = () => (typeof window === "undefined" ? null : localStorage.getItem(TOKEN_KEY));
 export const setToken = (t: string) => localStorage.setItem(TOKEN_KEY, t);
@@ -9,12 +9,17 @@ export type Msg = { role: "user" | "assistant"; content: string };
 export type ChatMode = "chat" | "call" | "roleplay" | "characters" | "debate";
 export type GenerateType = "sentence" | "word" | "dialogue" | "flashcards";
 export type Learner = { targetLanguage: string; level: string };
+export type Achievement = { id: string; name: string; description: string; unlocked: boolean };
+export type Stats = {
+  totalSeconds: number; studiedDays: number; activeDays: number;
+  days: { day: string; seconds: number }[]; achievements: Achievement[];
+};
 export type Progress = {
   email: string; xp: number; streak: number; longest: number; messages: number;
   premium: boolean; giftClaimed: boolean; language: string; level: string; today: string[];
 };
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+async function request<T>(method: string, path: string, body?: unknown, keepalive = false): Promise<T> {
   const token = getToken();
   let res: Response;
   try {
@@ -22,6 +27,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
       method,
       headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       body: body === undefined ? undefined : JSON.stringify(body),
+      keepalive,
     });
   } catch {
     throw new Error("Can't reach the server. Is the backend running on " + BASE + "?");
@@ -38,7 +44,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   return data as T;
 }
 
-const post = <T>(path: string, body?: unknown) => request<T>("POST", path, body);
+const post = <T>(path: string, body?: unknown, keepalive = false) => request<T>("POST", path, body, keepalive);
 
 export const api = {
   auth: {
@@ -51,6 +57,8 @@ export const api = {
     settings: (b: { language?: string; level?: string }) => request<Progress>("PATCH", "/progress/settings", b),
     premium: () => post<Progress>("/progress/premium"),
     gift: () => post<Progress>("/progress/gift"),
+    stats: () => request<Stats>("GET", "/progress/stats"),
+    time: (seconds: number, day: string, keepalive = false) => post<Progress>("/progress/time", { seconds, day }, keepalive),
   },
   chat: (b: Learner & { mode: ChatMode; messages: Msg[]; context?: Record<string, string> }) =>
     post<{ reply: string }>("/ai/chat", b),

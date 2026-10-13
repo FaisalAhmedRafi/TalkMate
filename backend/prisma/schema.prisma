@@ -15,6 +15,7 @@ model User {
   createdAt    DateTime        @default(now())
   progress     Progress?
   entries      PracticeEntry[]
+  days         PracticeDay[]
 }
 
 model Progress {
@@ -41,4 +42,13 @@ model PracticeEntry {
   createdAt DateTime @default(now())
 
   @@index([userId, day])
+}
+
+model PracticeDay {
+  userId  String
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  day     String // the user's local date from the browser, YYYY-MM-DD
+  seconds Int    @default(0)
+
+  @@id([userId, day])
 }

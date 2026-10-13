@@ -1,8 +1,21 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.module';
 import { SettingsDto } from './progress.dto';
 
 const ymd = (d: Date) => d.toISOString().slice(0, 10);
+const STUDY_SECONDS = 180; // a day counts as a completed session after 3 minutes
+const XP_PER_LEVEL = 50;
+
+const ACHIEVEMENTS = [
+  { id: 'first_step', name: 'First step', description: 'Send your first practice message', test: (s: Facts) => s.messages >= 1 },
+  { id: 'warm_up', name: 'Warm-up', description: 'Practise 3 minutes in one day', test: (s: Facts) => s.studiedDays >= 1 },
+  { id: 'on_a_roll', name: 'On a roll', description: 'Reach a 3-day streak', test: (s: Facts) => s.longest >= 3 },
+  { id: 'week', name: 'Week warrior', description: 'Reach a 7-day streak', test: (s: Facts) => s.longest >= 7 },
+  { id: 'chatterbox', name: 'Chatterbox', description: 'Send 50 practice messages', test: (s: Facts) => s.messages >= 50 },
+  { id: 'hour', name: 'Hour of power', description: 'Practise for 60 minutes in total', test: (s: Facts) => s.totalSeconds >= 3600 },
+  { id: 'level5', name: 'Level 5', description: 'Reach level 5', test: (s: Facts) => s.level >= 5 },
+];
+type Facts = { messages: number; longest: number; totalSeconds: number; studiedDays: number; level: number };
 const daysBetween = (a: string, b: string) => Math.round((Date.parse(b) - Date.parse(a)) / 86_400_000);
 
 @Injectable()
@@ -33,21 +46,61 @@ export class ProgressService {
   }
 
   async practice(userId: string, text: string) {
-    const today = ymd(new Date());
-    const p = await this.ensure(userId);
-    const gap = p.lastDay ? daysBetween(p.lastDay, today) : null;
-    const streak = gap === 0 ? p.streak : gap === 1 ? p.streak + 1 : 1;
+    await this.ensure(userId);
     await this.prisma.$transaction([
       this.prisma.progress.update({
         where: { userId },
-        data: {
-          xp: { increment: 10 }, messages: { increment: 1 },
-          streak, longest: Math.max(p.longest, streak), lastDay: today,
-        },
+        data: { xp: { increment: 10 }, messages: { increment: 1 } },
       }),
-      this.prisma.practiceEntry.create({ data: { userId, day: today, text: text.slice(0, 1000) } }),
+      this.prisma.practiceEntry.create({ data: { userId, day: ymd(new Date()), text: text.slice(0, 1000) } }),
     ]);
     return this.snapshot(userId);
+  }
+
+  /** Practice time reported by the browser. Streak goes up when a day first reaches 3 minutes. */
+  async addTime(userId: string, seconds: number, day: string) {
+    const gapToUtc = (Date.parse(ymd(new Date())) - Date.parse(day)) / 86_400_000;
+    if (!Number.isFinite(gapToUtc) || Math.abs(gapToUtc) > 1) throw new BadRequestException('Invalid day');
+
+    const p = await this.ensure(userId);
+    const row = await this.prisma.practiceDay.upsert({
+      where: { userId_day: { userId, day } },
+      create: { userId, day, seconds },
+      update: { seconds: { increment: seconds } },
+    });
+    if (row.seconds >= STUDY_SECONDS && row.seconds - seconds < STUDY_SECONDS) {
+      const gap = p.lastDay ? daysBetween(p.lastDay, day) : null;
+      if (gap === null || gap > 0) {
+        const streak = gap === 1 ? p.streak + 1 : 1;
+        await this.prisma.progress.update({
+          where: { userId },
+          data: { streak, longest: Math.max(p.longest, streak), lastDay: day },
+        });
+      }
+    }
+    return this.snapshot(userId);
+  }
+
+  async stats(userId: string) {
+    const p = await this.ensure(userId);
+    const [rows, agg, studiedDays, activeDays] = await Promise.all([
+      this.prisma.practiceDay.findMany({ where: { userId }, orderBy: { day: 'desc' }, take: 400 }),
+      this.prisma.practiceDay.aggregate({ where: { userId }, _sum: { seconds: true } }),
+      this.prisma.practiceDay.count({ where: { userId, seconds: { gte: STUDY_SECONDS } } }),
+      this.prisma.practiceDay.count({ where: { userId, seconds: { gt: 0 } } }),
+    ]);
+    const totalSeconds = agg._sum.seconds ?? 0;
+    const facts: Facts = {
+      messages: p.messages, longest: p.longest, totalSeconds, studiedDays,
+      level: Math.floor(p.xp / XP_PER_LEVEL) + 1,
+    };
+    return {
+      totalSeconds, studiedDays, activeDays,
+      days: rows.reverse().map((r) => ({ day: r.day, seconds: r.seconds })),
+      achievements: ACHIEVEMENTS.map((a) => ({
+        id: a.id, name: a.name, description: a.description, unlocked: a.test(facts),
+      })),
+    };
   }
 
   async settings(userId: string, dto: SettingsDto) {
