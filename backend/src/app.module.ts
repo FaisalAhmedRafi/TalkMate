@@ -6,6 +6,7 @@ import { AiModule } from './ai/ai.module';
 import { AuthModule } from './auth/auth.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProgressModule } from './progress/progress.module';
+import { SentenceModule } from './sentence/sentence.module';
 
 @Controller()
 class HealthController {
@@ -24,6 +25,7 @@ class HealthController {
     AuthModule,
     ProgressModule,
     AiModule,
+    SentenceModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

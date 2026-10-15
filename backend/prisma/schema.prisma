@@ -8,29 +8,31 @@ datasource db {
 }
 
 model User {
-  id           String          @id @default(cuid())
-  email        String          @unique
+  id           String             @id @default(cuid())
+  email        String             @unique
   name         String?
   passwordHash String
-  createdAt    DateTime        @default(now())
+  createdAt    DateTime           @default(now())
   progress     Progress?
   entries      PracticeEntry[]
   days         PracticeDay[]
+  sentences    SentenceProgress[]
 }
 
 model Progress {
-  userId      String   @id
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  xp          Int      @default(0)
-  streak      Int      @default(0)
-  longest     Int      @default(0)
-  messages    Int      @default(0)
-  lastDay     String? // UTC date, YYYY-MM-DD
-  premium     Boolean  @default(false)
-  giftClaimed Boolean  @default(false)
-  language    String   @default("Spanish")
-  level       String   @default("Beginner")
-  updatedAt   DateTime @updatedAt
+  userId         String   @id
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  xp             Int      @default(0)
+  streak         Int      @default(0)
+  longest        Int      @default(0)
+  messages       Int      @default(0)
+  lastDay        String? // UTC date, YYYY-MM-DD
+  premium        Boolean  @default(false)
+  giftClaimed    Boolean  @default(false)
+  language       String   @default("Spanish")
+  level          String   @default("Beginner")
+  nativeLanguage String   @default("English") // what translations and feedback are written in
+  updatedAt      DateTime @updatedAt
 }
 
 model PracticeEntry {
@@ -51,4 +53,17 @@ model PracticeDay {
   seconds Int    @default(0)
 
   @@id([userId, day])
+}
+
+model SentenceProgress {
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skillId   String // matches an id in src/sentence/sentence.catalog.ts
+  bestScore Float    @default(0) // best session average, 1-5
+  lastScore Float    @default(0)
+  attempts  Int      @default(0)
+  passed    Boolean  @default(false) // a session average of 3 or more
+  updatedAt DateTime @updatedAt
+
+  @@id([userId, skillId])
 }

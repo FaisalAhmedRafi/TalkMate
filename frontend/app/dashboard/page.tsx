@@ -25,7 +25,7 @@ const NAV = [
 const XP_PER_LEVEL = 50;
 const EMPTY: Progress = {
   email: "", xp: 0, streak: 0, longest: 0, messages: 0, premium: false, giftClaimed: false,
-  language: "Spanish", level: "Beginner", today: [],
+  language: "Spanish", nativeLanguage: "English", level: "Beginner", today: [],
 };
 
 export default function Dashboard() {
@@ -43,7 +43,11 @@ export default function Dashboard() {
   useEffect(() => {
     if (!getToken()) { router.replace("/login"); return; }
     api.progress.get()
-      .then((p) => { setS(p); setLoaded(true); })
+      .then((p) => {
+        setS(p); setLoaded(true);
+        // the Sentence Mode sidebar links here with ?tab=progress
+        if (new URLSearchParams(window.location.search).get("tab") === "progress") setActive("progress");
+      })
       .catch((e) => setLoadError(e instanceof Error ? e.message : "Couldn't load your progress"));
   }, [router]);
 
@@ -55,7 +59,7 @@ export default function Dashboard() {
 
   const fail = (e: unknown) => setToast(e instanceof Error ? e.message : "Something went wrong");
   const practice = (text: string) => { api.progress.practice(text).then(setS).catch(fail); };
-  const updateSettings = (patch: { language?: string; level?: string }) => {
+  const updateSettings = (patch: { language?: string; nativeLanguage?: string; level?: string }) => {
     setS((p) => ({ ...p, ...patch }));
     api.progress.settings(patch).catch(fail);
   };
@@ -71,8 +75,12 @@ export default function Dashboard() {
 
   const level = Math.floor(s.xp / XP_PER_LEVEL) + 1;
   const progress = (s.xp % XP_PER_LEVEL) / XP_PER_LEVEL;
-  const learner = { targetLanguage: s.language, level: s.level };
-  const clickMode = (m: Mode) => (m.premium && !s.premium ? setUpsell(m.title) : setOpenMode(m));
+  const learner = { targetLanguage: s.language, nativeLanguage: s.nativeLanguage, level: s.level };
+  const clickMode = (m: Mode) => {
+    if (m.premium && !s.premium) return setUpsell(m.title);
+    if (m.id === "sentence") return router.push("/sentence"); // Sentence Mode is a set of pages, not a modal
+    setOpenMode(m);
+  };
   const onNav = (id: string) => (id === "premium" ? setUpsell("Premium") : setActive(id));
 
   if (!loaded) {
@@ -87,12 +95,13 @@ export default function Dashboard() {
   return (
     <div className="flex min-h-screen bg-[#16161c] text-white">
       <aside className="fixed inset-y-0 left-0 z-10 hidden w-[236px] flex-col justify-between border-r border-white/5 bg-[#16161c] px-6 py-6 md:flex">
-        <div className="flex items-center gap-2">
+        <button onClick={() => { setActive("home"); setOpenMode(null); router.push("/dashboard"); }} aria-label="TalkMate home"
+          className="flex items-center gap-2 rounded-lg text-left transition-opacity hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500">
           <svg width="32" height="32" viewBox="0 0 32 32" fill="none" aria-hidden="true">
             <path d="M6 8l8 8-8 8M16 8l8 8-8 8" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
           <span className="text-lg font-bold tracking-tight">TalkMate</span>
-        </div>
+        </button>
         <nav className="flex flex-col gap-1">
           {NAV.map(({ id, label, icon: Icon, dot, pink }) => (
             <button key={id} onClick={() => onNav(id)}
@@ -122,7 +131,10 @@ export default function Dashboard() {
             <section>
               <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
                 <h1 className="text-lg font-semibold">Learning modes</h1>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs text-white/50">My language</span>
+                  <Select label="My language" value={s.nativeLanguage} onChange={(v) => updateSettings({ nativeLanguage: v })} options={LANGUAGES} />
+                  <span className="ml-1 text-xs text-white/50">Learning</span>
                   <Select label="Language" value={s.language} onChange={(v) => updateSettings({ language: v })} options={LANGUAGES} />
                   <Select label="Level" value={s.level} onChange={(v) => updateSettings({ level: v })} options={LEVELS} />
                 </div>
@@ -250,7 +262,7 @@ export default function Dashboard() {
 }
 
 function FeedbackModal({ learner, texts, onClose }: {
-  learner: { targetLanguage: string; level: string }; texts: string[]; onClose: () => void;
+  learner: { targetLanguage: string; nativeLanguage?: string; level: string }; texts: string[]; onClose: () => void;
 }) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);

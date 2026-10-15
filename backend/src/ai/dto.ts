@@ -9,7 +9,7 @@ export const GENERATE_TYPES = ['sentence', 'word', 'dialogue', 'flashcards'] as 
 export type ChatMode = (typeof CHAT_MODES)[number];
 export type GenerateType = (typeof GENERATE_TYPES)[number];
 
-class LearnerDto {
+export class LearnerDto {
   @IsOptional() @IsString() @MaxLength(40) targetLanguage?: string;
   @IsOptional() @IsString() @MaxLength(40) nativeLanguage?: string;
   @IsOptional() @IsIn(['Beginner', 'Intermediate', 'Advanced']) level?: string;

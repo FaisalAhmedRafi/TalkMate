@@ -8,15 +8,25 @@ export const clearToken = () => localStorage.removeItem(TOKEN_KEY);
 export type Msg = { role: "user" | "assistant"; content: string };
 export type ChatMode = "chat" | "call" | "roleplay" | "characters" | "debate";
 export type GenerateType = "sentence" | "word" | "dialogue" | "flashcards";
-export type Learner = { targetLanguage: string; level: string };
+export type Learner = { targetLanguage: string; level: string; nativeLanguage?: string };
 export type Achievement = { id: string; name: string; description: string; unlocked: boolean };
 export type Stats = {
   totalSeconds: number; studiedDays: number; activeDays: number;
   days: { day: string; seconds: number }[]; achievements: Achievement[];
 };
+export type SentenceSkill = {
+  id: string; title: string; description: string; emoji: string; passed: boolean; bestScore: number; attempts: number;
+};
+export type SentenceUnit = { number: number; title: string; skills: SentenceSkill[] };
+export type SentenceUnits = { percent: number; passed: number; total: number; units: SentenceUnit[] };
+export type SentenceItem = { sentence: string; translation: string; note: string };
+export type PronunciationResult = {
+  score: number; feedback: string; tip: string; heard: string; similarity: number;
+  spaced: boolean; words: { text: string; ok: boolean }[]; source: "ai" | "fallback";
+};
 export type Progress = {
   email: string; xp: number; streak: number; longest: number; messages: number;
-  premium: boolean; giftClaimed: boolean; language: string; level: string; today: string[];
+  premium: boolean; giftClaimed: boolean; language: string; nativeLanguage: string; level: string; today: string[];
 };
 
 async function request<T>(method: string, path: string, body?: unknown, keepalive = false): Promise<T> {
@@ -54,11 +64,22 @@ export const api = {
   progress: {
     get: () => request<Progress>("GET", "/progress"),
     practice: (text: string) => post<Progress>("/progress/practice", { text }),
-    settings: (b: { language?: string; level?: string }) => request<Progress>("PATCH", "/progress/settings", b),
+    settings: (b: { language?: string; nativeLanguage?: string; level?: string }) => request<Progress>("PATCH", "/progress/settings", b),
     premium: () => post<Progress>("/progress/premium"),
     gift: () => post<Progress>("/progress/gift"),
     stats: () => request<Stats>("GET", "/progress/stats"),
     time: (seconds: number, day: string, keepalive = false) => post<Progress>("/progress/time", { seconds, day }, keepalive),
+  },
+  sentence: {
+    units: () => request<SentenceUnits>("GET", "/sentence/units"),
+    session: (skillId: string, b: Learner) => {
+      if (!skillId) throw new Error("Couldn't tell which skill to practise. Go back and pick one.");
+      return post<{ skillId: string; title: string; items: SentenceItem[] }>("/sentence/session", { ...b, skillId });
+    },
+    evaluate: (b: Learner & { sentence: string; transcript: string; confidence?: number }) =>
+      post<PronunciationResult>("/sentence/evaluate", b),
+    complete: (b: { skillId: string; scores: number[] }) =>
+      post<{ average: number; passed: boolean; percent: number; progress: Progress }>("/sentence/complete", b),
   },
   chat: (b: Learner & { mode: ChatMode; messages: Msg[]; context?: Record<string, string> }) =>
     post<{ reply: string }>("/ai/chat", b),
