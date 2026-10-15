@@ -49,7 +49,14 @@ export class OpenRouterService {
           if ([401, 402, 403].includes(res.status)) {
             throw new BadGatewayException(`OpenRouter rejected the request (${res.status}). Check your API key.`);
           }
-          this.log.warn(`${model} -> ${res.status}`);
+          const detail = await this.errorDetail(res);
+          this.log.warn(`${model} -> ${res.status} ${detail}`); // the real reason shows up in the backend terminal
+          // The daily free quota is account-wide, so retrying or switching model cannot help.
+          if (res.status === 429 && /per[- ]?day|daily/i.test(detail)) {
+            throw new BadGatewayException(
+              'OpenRouter says you used up the free requests for today (50 a day, unless you have ever bought $10 of credits, then 1,000). It resets each day (UTC), or add credits on openrouter.ai.',
+            );
+          }
           if (res.status === 429 || res.status >= 500) {
             await sleep(700 * (attempt + 1));
             continue; // retry once, then fall through to the next model
@@ -62,5 +69,16 @@ export class OpenRouterService {
       }
     }
     throw new BadGatewayException('The free AI models are busy or rate limited. Try again in a minute.');
+  }
+
+  /** OpenRouter's error text, for the log and for telling a daily limit from a short busy spell. */
+  private async errorDetail(res: Response): Promise<string> {
+    try {
+      const j: any = await res.json();
+      const raw = j?.error?.metadata?.raw;
+      return `${j?.error?.message ?? ''} ${raw ? (typeof raw === 'string' ? raw : JSON.stringify(raw)) : ''}`.trim().slice(0, 300);
+    } catch {
+      return '';
+    }
   }
 }

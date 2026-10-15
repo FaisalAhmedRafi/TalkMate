@@ -6,6 +6,7 @@ export class PracticeDto {
 
 export class SettingsDto {
   @IsOptional() @IsString() @MaxLength(40) language?: string;
+  @IsOptional() @IsString() @MaxLength(40) nativeLanguage?: string;
   @IsOptional() @IsIn(['Beginner', 'Intermediate', 'Advanced']) level?: string;
 }
 

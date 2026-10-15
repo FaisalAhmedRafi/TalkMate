@@ -40,7 +40,7 @@ export class ProgressService {
     return {
       email: user.email,
       xp: p.xp, streak: lapsed ? 0 : p.streak, longest: p.longest, messages: p.messages,
-      premium: p.premium, giftClaimed: p.giftClaimed, language: p.language, level: p.level,
+      premium: p.premium, giftClaimed: p.giftClaimed, language: p.language, nativeLanguage: p.nativeLanguage, level: p.level,
       today: entries.reverse().map((e) => e.text),
     };
   }
@@ -105,7 +105,7 @@ export class ProgressService {
 
   async settings(userId: string, dto: SettingsDto) {
     await this.ensure(userId);
-    await this.prisma.progress.update({ where: { userId }, data: { language: dto.language, level: dto.level } });
+    await this.prisma.progress.update({ where: { userId }, data: { language: dto.language, nativeLanguage: dto.nativeLanguage, level: dto.level } });
     return this.snapshot(userId);
   }
 

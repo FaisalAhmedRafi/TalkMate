@@ -65,7 +65,7 @@ export class SentenceService {
     const system = sessionSystem(found.unit, found.skill, learner(dto));
 
     let best: { sentence: string; translation: string; note: string }[] = [];
-    for (let attempt = 0; attempt < 3; attempt++) {
+    for (let attempt = 0; attempt < 2; attempt++) {
       const text = await this.or.complete(
         [{ role: 'system', content: system }, { role: 'user', content: 'Generate it now.' }],
         { temperature: 0.8, maxTokens: 1200 },
