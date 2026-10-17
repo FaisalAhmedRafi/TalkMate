@@ -13,8 +13,15 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [ref, setRef] = useState<string | undefined>();
 
   useEffect(() => clearToken(), []);
+
+  // an invite link looks like /login?ref=ABC123: open the sign-up form with the code
+  useEffect(() => {
+    const r = new URLSearchParams(window.location.search).get("ref");
+    if (r) { setRef(r); setMode("register"); }
+  }, []);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,7 +31,7 @@ export default function LoginPage() {
       const { token } =
         mode === "login"
           ? await api.auth.login({ email, password })
-          : await api.auth.register({ email, password, name: name.trim() || undefined });
+          : await api.auth.register({ email, password, name: name.trim() || undefined, referralCode: ref });
       setToken(token);
       router.replace("/dashboard");
     } catch (err) {
@@ -40,6 +47,7 @@ export default function LoginPage() {
       <form onSubmit={submit} className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#1f1f27] p-6">
         <p className="text-sm font-bold tracking-tight text-white/60">TalkMate</p>
         <h1 className="mt-1 text-xl font-semibold">{mode === "login" ? "Log in" : "Create your account"}</h1>
+        {ref && mode === "register" && <p className="mt-2 text-xs text-white/60">Invite code <b>{ref}</b> applied.</p>}
         <div className="mt-5 space-y-3">
           {mode === "register" && (
             <input className={input} placeholder="Name (optional)" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />

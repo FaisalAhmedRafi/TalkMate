@@ -17,6 +17,14 @@ model User {
   entries      PracticeEntry[]
   days         PracticeDay[]
   sentences    SentenceProgress[]
+
+  referralCode     String?  @unique // the code in the user's invite link
+  referredById     String?
+  referredBy       User?    @relation("Referrals", fields: [referredById], references: [id], onDelete: SetNull)
+  referrals        User[]   @relation("Referrals")
+  referralRewarded Boolean  @default(false) // the free months for this user's referral were paid out
+  personalization  Personalization?
+  subscription     Subscription?
 }
 
 model Progress {
@@ -66,4 +74,25 @@ model SentenceProgress {
   updatedAt DateTime @updatedAt
 
   @@id([userId, skillId])
+}
+
+model Personalization {
+  userId    String  @id
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reason    String?
+  frequency String?
+  goal      String?
+  style     String?
+  ageRange  String?
+}
+
+// Demo subscriptions: billing is not connected yet.
+model Subscription {
+  userId           String   @id
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  months           Int      @default(1) // plan length
+  status           String   @default("active") // active | paused | canceled
+  currentPeriodEnd DateTime // end of the period already paid for
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 }

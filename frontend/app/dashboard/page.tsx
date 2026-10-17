@@ -11,6 +11,7 @@ import { GeneratePanel } from "@/components/GeneratePanel";
 import { PhotoPanel } from "@/components/PhotoPanel";
 import { PracticeTimer } from "@/components/PracticeTimer";
 import { ProgressView } from "@/components/ProgressView";
+import { AccountView } from "@/components/account/AccountView";
 import { api, clearToken, getToken, type Progress } from "@/lib/api";
 import { LANGUAGES, LEVELS, MODES, type Mode } from "@/lib/modes";
 
@@ -37,7 +38,6 @@ export default function Dashboard() {
   const [openMode, setOpenMode] = useState<Mode | null>(null);
   const [upsell, setUpsell] = useState<string | null>(null);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
-  const [accountOpen, setAccountOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
@@ -118,8 +118,8 @@ export default function Dashboard() {
             className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold text-white/80 hover:bg-white/5">
             <Gift size={18} className="text-pink-400" /> A gift for you
           </button>
-          <button onClick={() => setAccountOpen(true)}
-            className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold text-white/80 hover:bg-white/5">
+          <button onClick={() => setActive("account")}
+            className={`flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition-colors ${active === "account" ? "bg-white/10" : "text-white/80 hover:bg-white/5"}`}>
             <User size={18} /> Account
           </button>
         </div>
@@ -214,6 +214,8 @@ export default function Dashboard() {
               </div>
             </aside>
           </div>
+        ) : active === "account" ? (
+          <AccountView s={s} onLanguage={(language) => updateSettings({ language })} onLogout={logout} onToast={setToast} onSnapshot={setS} />
         ) : active === "progress" ? (
           <ProgressView s={s} onOpenFeedback={() => setFeedbackOpen(true)} />
         ) : (
@@ -243,14 +245,6 @@ export default function Dashboard() {
             className="mt-6 w-full rounded-full bg-pink-500 py-3 text-sm font-semibold hover:bg-pink-400">
             Unlock all modes (demo)
           </button>
-        </Modal>
-      )}
-
-      {accountOpen && (
-        <Modal onClose={() => setAccountOpen(false)} label="Account">
-          <h2 className="text-xl font-semibold">Account</h2>
-          <p className="mt-3 text-sm text-white/70">{s.email}</p>
-          <button onClick={logout} className="mt-6 w-full rounded-full bg-white/10 py-3 text-sm font-semibold hover:bg-white/20">Log out</button>
         </Modal>
       )}
 

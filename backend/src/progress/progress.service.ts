@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.module';
+import { startSubscription, syncPremium } from '../account/subscription.util';
 import { SettingsDto } from './progress.dto';
 
 const ymd = (d: Date) => d.toISOString().slice(0, 10);
@@ -29,6 +30,7 @@ export class ProgressService {
   /** What the frontend shows. A streak that lapsed over a day ago reads as 0 without writing. */
   async snapshot(userId: string) {
     const today = ymd(new Date());
+    await syncPremium(this.prisma, userId); // a cancelled plan that has run out stops being Premium
     const [p, user, entries] = await Promise.all([
       this.ensure(userId),
       this.prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { email: true } }),
@@ -109,10 +111,10 @@ export class ProgressService {
     return this.snapshot(userId);
   }
 
-  /** Demo unlock until real billing exists. */
+  /** Demo unlock until real billing exists. It starts a demo subscription so the Account page has something to manage. */
   async unlockPremium(userId: string) {
     await this.ensure(userId);
-    await this.prisma.progress.update({ where: { userId }, data: { premium: true } });
+    await startSubscription(this.prisma, userId);
     return this.snapshot(userId);
   }
 

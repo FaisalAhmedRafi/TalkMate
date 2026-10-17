@@ -24,6 +24,15 @@ export type PronunciationResult = {
   score: number; feedback: string; tip: string; heard: string; similarity: number;
   spaced: boolean; words: { text: string; ok: boolean }[]; source: "ai" | "fallback";
 };
+export type PersonalizationData = {
+  values: Record<string, string | null>;
+  questions: { key: string; label: string; options: string[] }[];
+};
+export type Referral = { code: string; invited: number; rewarded: number };
+export type SubscriptionInfo = {
+  status: "none" | "active" | "paused" | "canceled"; months: number | null;
+  nextPayment: string | null; accessUntil: string | null; premium: boolean;
+};
 export type Progress = {
   email: string; xp: number; streak: number; longest: number; messages: number;
   premium: boolean; giftClaimed: boolean; language: string; nativeLanguage: string; level: string; today: string[];
@@ -59,7 +68,7 @@ const post = <T>(path: string, body?: unknown, keepalive = false) => request<T>(
 export const api = {
   auth: {
     login: (b: { email: string; password: string }) => post<{ token: string }>("/auth/login", b),
-    register: (b: { email: string; password: string; name?: string }) => post<{ token: string }>("/auth/register", b),
+    register: (b: { email: string; password: string; name?: string; referralCode?: string }) => post<{ token: string }>("/auth/register", b),
   },
   progress: {
     get: () => request<Progress>("GET", "/progress"),
@@ -69,6 +78,16 @@ export const api = {
     gift: () => post<Progress>("/progress/gift"),
     stats: () => request<Stats>("GET", "/progress/stats"),
     time: (seconds: number, day: string, keepalive = false) => post<Progress>("/progress/time", { seconds, day }, keepalive),
+  },
+  account: {
+    personalization: () => request<PersonalizationData>("GET", "/account/personalization"),
+    savePersonalization: (b: Record<string, string>) => request<PersonalizationData>("PATCH", "/account/personalization", b),
+    referral: () => request<Referral>("GET", "/account/referral"),
+    subscription: () => request<SubscriptionInfo>("GET", "/account/subscription"),
+    changePlan: (months: number) => post<SubscriptionInfo>("/account/subscription/plan", { months }),
+    pause: () => post<SubscriptionInfo>("/account/subscription/pause"),
+    resume: () => post<SubscriptionInfo>("/account/subscription/resume"),
+    cancel: () => post<SubscriptionInfo>("/account/subscription/cancel"),
   },
   sentence: {
     units: () => request<SentenceUnits>("GET", "/sentence/units"),

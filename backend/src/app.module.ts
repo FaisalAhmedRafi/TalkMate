@@ -2,6 +2,7 @@ import { Controller, Get, Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { AccountModule } from './account/account.module';
 import { AiModule } from './ai/ai.module';
 import { AuthModule } from './auth/auth.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -24,6 +25,7 @@ class HealthController {
     PrismaModule,
     AuthModule,
     ProgressModule,
+    AccountModule,
     AiModule,
     SentenceModule,
   ],

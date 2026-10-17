@@ -13,12 +13,17 @@ export class AuthService {
     if (await this.prisma.user.findUnique({ where: { email } })) {
       throw new ConflictException('An account with this email already exists.');
     }
+    // an unknown invite code is ignored, so a typo never blocks sign-up
+    const referrer = dto.referralCode
+      ? await this.prisma.user.findUnique({ where: { referralCode: dto.referralCode.toUpperCase() }, select: { id: true } })
+      : null;
     const user = await this.prisma.user.create({
       data: {
         email,
         name: dto.name?.trim() || null,
         passwordHash: await bcrypt.hash(dto.password, 10),
         progress: { create: {} },
+        referredBy: referrer ? { connect: { id: referrer.id } } : undefined,
       },
     });
     return this.session(user.id, user.email);
