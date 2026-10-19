@@ -18,6 +18,7 @@ model User {
   days         PracticeDay[]
   sentences    SentenceProgress[]
   words        WordProgress[]
+  flashcards   FlashcardDeck[]
 
   referralCode     String?          @unique // the code in the user's invite link
   referredById     String?
@@ -113,4 +114,19 @@ model WordProgress {
   updatedAt DateTime @updatedAt
 
   @@id([userId, wordId, language])
+}
+
+// One deck of Flashcards per user, topic and language. The cards are written once by the AI (with their photos)
+// and kept, so the same words come back every time and the learner's marks stay attached to them.
+model FlashcardDeck {
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  topicId   String // matches an id in src/flashcard/flashcard.catalog.ts
+  language  String // the language being learned
+  cards     Json // [{ term, translation, example, exampleTranslation, photo, image }]
+  status    Json     @default("[]") // per card: "new" | "learning" | "known"
+  flagged   Json     @default("[]") // per card: true when flagged for the Daily review
+  updatedAt DateTime @updatedAt
+
+  @@id([userId, topicId, language])
 }

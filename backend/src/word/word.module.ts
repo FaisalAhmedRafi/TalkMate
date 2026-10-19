@@ -9,5 +9,6 @@ import { WordService } from './word.service';
   imports: [AiModule, ProgressModule],
   controllers: [WordController],
   providers: [WordService, WordImageService],
+  exports: [WordImageService], // Flashcards reuse the Pexels photo lookup
 })
 export class WordModule {}

@@ -16,18 +16,24 @@ export class WordImageService {
 
   constructor(private readonly cfg: ConfigService) {}
 
-  async find(item: WordItem): Promise<WordImage | null> {
+  /** The photo for a Word Mode word. */
+  find(item: WordItem): Promise<WordImage | null> {
+    return this.search(item.id, item.photo);
+  }
+
+  /** A photo for any search text, cached under cacheKey (Flashcards use this too). */
+  async search(cacheKey: string, query: string): Promise<WordImage | null> {
     const key = (this.cfg.get<string>('PEXELS_API_KEY') || '').trim();
-    if (!key) return null;
-    const hit = this.cache.get(item.id);
+    if (!key || !query.trim()) return null;
+    const hit = this.cache.get(cacheKey);
     if (hit) return hit;
     try {
       const res = await fetch(
-        `https://api.pexels.com/v1/search?query=${encodeURIComponent(item.photo)}&per_page=1&orientation=landscape`,
+        `https://api.pexels.com/v1/search?query=${encodeURIComponent(query)}&per_page=1&orientation=landscape`,
         { headers: { Authorization: key }, signal: AbortSignal.timeout(6000) },
       );
       if (!res.ok) {
-        this.log.warn(`Pexels "${item.photo}" -> ${res.status}`);
+        this.log.warn(`Pexels "${query}" -> ${res.status}`);
         return null;
       }
       const p = (await res.json())?.photos?.[0];
@@ -37,10 +43,10 @@ export class WordImageService {
         credit: String(p.photographer ?? 'Pexels'),
         creditUrl: String(p.url ?? 'https://www.pexels.com'),
       };
-      this.cache.set(item.id, image);
+      this.cache.set(cacheKey, image);
       return image;
     } catch (e) {
-      this.log.warn(`Pexels "${item.photo}" failed: ${(e as Error).message}`);
+      this.log.warn(`Pexels "${query}" failed: ${(e as Error).message}`);
       return null;
     }
   }

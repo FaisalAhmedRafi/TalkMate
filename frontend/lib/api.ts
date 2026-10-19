@@ -30,6 +30,15 @@ export type WordLesson = {
   step: number; scores: (number | null)[]; resumed: boolean;
   image: { url: string; credit: string; creditUrl: string } | null;
 };
+export type FlashImage = { url: string; credit: string; creditUrl: string };
+export type FlashTopicInfo = { id: string; title: string; emoji: string; total: number; known: number; completed: boolean; cover: string | null };
+export type FlashTopics = { language: string; reviewCount: number; topics: FlashTopicInfo[] };
+export type FlashStatus = "new" | "learning" | "known";
+export type FlashCard = {
+  topicId: string; index: number; term: string; translation: string; example: string; exampleTranslation: string;
+  image: FlashImage | null; status: FlashStatus; flagged: boolean;
+};
+export type FlashDeck = { topicId: string; title: string; emoji: string; cards: FlashCard[] };
 export type PronunciationResult = {
   score: number; feedback: string; tip: string; heard: string; similarity: number;
   spaced: boolean; words: { text: string; ok: boolean }[]; source: "ai" | "fallback";
@@ -121,6 +130,18 @@ export const api = {
       request<{ ok: boolean }>("PATCH", "/word/lesson", b),
     complete: (b: { wordId: string; language: string; scores: (number | null)[] }) =>
       post<{ average: number; passed: boolean; percent: number; progress: Progress }>("/word/complete", b),
+  },
+  flashcards: {
+    topics: () => request<FlashTopics>("GET", "/flashcards/topics"),
+    /** Opens a deck: the saved 15 cards, or new ones when restart is true or it is the first time */
+    deck: (topicId: string, b: Learner & { restart?: boolean }) => {
+      if (!topicId) throw new Error("Couldn't tell which topic to open. Go back and pick one.");
+      return post<FlashDeck>("/flashcards/deck", { ...b, topicId });
+    },
+    review: () => request<FlashDeck & { language: string }>("GET", "/flashcards/review"),
+    mark: (b: { topicId: string; language: string; index: number; status?: "learning" | "known"; flagged?: boolean }) =>
+      request<{ ok: boolean }>("PATCH", "/flashcards/mark", b),
+    complete: (b: { topicId: string; known: number; total: number }) => post<{ progress: Progress }>("/flashcards/complete", b),
   },
   chat: (b: Learner & { mode: ChatMode; messages: Msg[]; context?: Record<string, string> }) =>
     post<{ reply: string }>("/ai/chat", b),
