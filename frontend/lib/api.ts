@@ -20,6 +20,16 @@ export type SentenceSkill = {
 export type SentenceUnit = { number: number; title: string; skills: SentenceSkill[] };
 export type SentenceUnits = { percent: number; passed: number; total: number; units: SentenceUnit[] };
 export type SentenceItem = { sentence: string; translation: string; note: string };
+export type WordStar = { id: string; emoji: string; passed: boolean; bestScore: number; inProgress: boolean };
+export type WordUnit = { number: number; title: string; words: WordStar[] };
+export type WordUnits = { language: string; percent: number; passed: number; total: number; units: WordUnit[] };
+export type SentenceChunk = { text: string; meaning: string; explanation: string };
+export type WordSentence = { sentence: string; translation: string; note: string; chunks: SentenceChunk[] };
+export type WordLesson = {
+  wordId: string; emoji: string; word: string; translation: string; sentences: WordSentence[];
+  step: number; scores: (number | null)[]; resumed: boolean;
+  image: { url: string; credit: string; creditUrl: string } | null;
+};
 export type PronunciationResult = {
   score: number; feedback: string; tip: string; heard: string; similarity: number;
   spaced: boolean; words: { text: string; ok: boolean }[]; source: "ai" | "fallback";
@@ -99,6 +109,18 @@ export const api = {
       post<PronunciationResult>("/sentence/evaluate", b),
     complete: (b: { skillId: string; scores: number[] }) =>
       post<{ average: number; passed: boolean; percent: number; progress: Progress }>("/sentence/complete", b),
+  },
+  word: {
+    units: () => request<WordUnits>("GET", "/word/units"),
+    /** Opens a lesson: resumes an unfinished one, unless restart is true */
+    start: (wordId: string, b: Learner & { restart?: boolean }) => {
+      if (!wordId) throw new Error("Couldn't tell which word to practise. Go back and pick one.");
+      return post<WordLesson>("/word/start", { ...b, wordId });
+    },
+    save: (b: { wordId: string; language: string; step: number; scores: (number | null)[] }) =>
+      request<{ ok: boolean }>("PATCH", "/word/lesson", b),
+    complete: (b: { wordId: string; language: string; scores: (number | null)[] }) =>
+      post<{ average: number; passed: boolean; percent: number; progress: Progress }>("/word/complete", b),
   },
   chat: (b: Learner & { mode: ChatMode; messages: Msg[]; context?: Record<string, string> }) =>
     post<{ reply: string }>("/ai/chat", b),

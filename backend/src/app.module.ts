@@ -8,6 +8,7 @@ import { AuthModule } from './auth/auth.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProgressModule } from './progress/progress.module';
 import { SentenceModule } from './sentence/sentence.module';
+import { WordModule } from './word/word.module';
 
 @Controller()
 class HealthController {
@@ -28,6 +29,7 @@ class HealthController {
     AccountModule,
     AiModule,
     SentenceModule,
+    WordModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

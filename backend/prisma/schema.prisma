@@ -17,12 +17,13 @@ model User {
   entries      PracticeEntry[]
   days         PracticeDay[]
   sentences    SentenceProgress[]
+  words        WordProgress[]
 
-  referralCode     String?  @unique // the code in the user's invite link
+  referralCode     String?          @unique // the code in the user's invite link
   referredById     String?
-  referredBy       User?    @relation("Referrals", fields: [referredById], references: [id], onDelete: SetNull)
-  referrals        User[]   @relation("Referrals")
-  referralRewarded Boolean  @default(false) // the free months for this user's referral were paid out
+  referredBy       User?            @relation("Referrals", fields: [referredById], references: [id], onDelete: SetNull)
+  referrals        User[]           @relation("Referrals")
+  referralRewarded Boolean          @default(false) // the free months for this user's referral were paid out
   personalization  Personalization?
   subscription     Subscription?
 }
@@ -95,4 +96,21 @@ model Subscription {
   currentPeriodEnd DateTime // end of the period already paid for
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
+}
+
+model WordProgress {
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  wordId    String // matches an id in src/word/word.catalog.ts
+  language  String // the language being learned: the same word is a separate lesson in each language
+  lesson    Json? // the generated lesson (word, translation, sentences), kept so "Continue" shows the same content
+  step      Int      @default(0) // 0 = word card, 1..N = the sentence being practised
+  scores    Json     @default("[]") // per sentence: 1-5, or null when skipped or not reached
+  finished  Boolean  @default(false) // the current run is done
+  passed    Boolean  @default(false) // ever passed (an average of 3 or more)
+  bestScore Float    @default(0)
+  attempts  Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@id([userId, wordId, language])
 }

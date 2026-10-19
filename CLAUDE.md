@@ -6,7 +6,9 @@ Guidance for working in this repository. Every source file in the project was re
 
 TalkMate is an AI language-practice web app (a Talkpal-style clone; the UI even says "in this clone"). A learner picks a target language and level, then practices in ten "modes": Chat, Call (voice), Sentence, Word, Dialogue, Roleplays, Characters, Debates, Photo and Flashcards. Practice earns XP, levels, streaks and achievements, and an LLM writes daily feedback.
 
-**Sentence is not a modal like the others.** It is a guided course under `/sentence` (10 units x 3 skills): the AI writes 5 sentences for a skill, the learner hears them, reads them aloud, and gets a 1-5 pronunciation rating. See "Sentence Mode" below.
+**Sentence and Word are not modals like the other modes.** Both are page-based courses. Sentence (`/sentence`, 10 units x 3 skills): the AI writes 5 sentences for a skill, the learner hears them, reads them aloud, and gets a 1-5 pronunciation rating. Word (`/word`, 10 units x 12 stars): each star is one word with a photo, then 3 sentences made from the word, rated the same way, and an unfinished lesson can be resumed. See "Sentence Mode" and "Word Mode" below.
+
+**Account is a dashboard tab**, not a modal: target language, Personalization answers, demo Subscriptions and Refer-a-friend. See "Account" below. There is no real billing.
 
 Monorepo with two independent apps, **no root `package.json`**. Run every npm command inside `backend/` or `frontend/`.
 
@@ -50,6 +52,7 @@ Backend `.env` (git-ignored). The README says `cp .env.example .env`, but **ther
 | `OPENROUTER_API_KEY` | for `/ai/*` | missing key returns 503 "OPENROUTER_API_KEY is not set on the server" |
 | `OPENROUTER_MODEL` | no | default `openrouter/free` |
 | `OPENROUTER_FALLBACK_MODELS` | no | comma-separated, tried in order after the primary |
+| `PEXELS_API_KEY` | no | free key from pexels.com/api; gives each Word Mode word a stock photo. Without it the app shows the word's emoji |
 | `FRONTEND_URL` | no | comma-separated CORS origins, default `http://localhost:3000` |
 | `PORT` | no | default 4000, binds `0.0.0.0` |
 
@@ -61,12 +64,14 @@ Frontend `.env.local` (copy from `.env.local.example`): `NEXT_PUBLIC_API_URL=htt
 
 ```
 backend/
-  prisma/schema.prisma            5 models (below)
+  prisma/schema.prisma            8 models (below)
   prisma/migrations/
     20261007160943_init/          User, Progress, PracticeEntry
     20261013154234_practice_time/ PracticeDay
     20261015035243_sentence_mode/ SentenceProgress
     20261015073124_/              Progress.nativeLanguage (folder has no name suffix because --name was omitted; do not rename an applied migration)
+    20261017110133_/              Account: User referral columns, Personalization, Subscription (also unnamed)
+    <timestamp>_word_mode/        WordProgress (create it with `npx prisma migrate dev --name word_mode`; no SQL file is kept in the download)
   src/main.ts                     bootstrap, body limit, CORS, ValidationPipe
   src/app.module.ts               ConfigModule (global), Throttler, HealthController (GET /health)
   src/prisma/prisma.module.ts     global PrismaService (extends PrismaClient, connects on init)
@@ -74,6 +79,8 @@ backend/
   src/progress/                   controller, service, dto, module (exports ProgressService)
   src/ai/                         controller, service, openrouter.service, prompts, dto, module (exports OpenRouterService)
   src/sentence/                   catalog, scoring, prompts, dto, service, controller, module (Sentence Mode)
+  src/account/                    controller, service, dto, options (Personalization questions), subscription.util, module
+  src/word/                       catalog, prompts, dto, images (Pexels), service, controller, module (Word Mode)
 frontend/
   app/layout.tsx, globals.css     root layout (title "TalkMate"), Tailwind directives
   app/page.tsx                    redirects to /dashboard
@@ -82,8 +89,13 @@ frontend/
   app/sentence/                   layout.tsx, page.tsx (unit list), [skillId]/page.tsx (skill intro), [skillId]/practice/page.tsx
   components/                     ChatPanel, GeneratePanel, PhotoPanel, ProgressView, PracticeTimer, Modal
   components/sentence/            SentenceProvider (auth, Premium gate, shared data), SentenceShell (sidebar + Logo)
+  components/account/             AccountView (menu), PersonalizationView, SubscriptionView, ReferView, SubPage (shared header)
+  components/word/                WordProvider (auth, Premium gate, star grid data)
+  components/PronunciationReview  Stars, ColoredSentence, Review (shared by Word Mode)
+  app/word/                       layout.tsx, page.tsx (star grid), [wordId]/page.tsx (the lesson)
   lib/api.ts, modes.ts, dates.ts  API client + types, mode/language constants, local-date helpers
   lib/speech.ts, sentence.ts      browser speech helpers; Sentence Mode helpers (session key, prefs, useSkillId)
+  lib/word.ts, usePronunciation.ts  Word Mode helpers (useWordId, nextWordId); mic -> rating hook
 ```
 
 ## Backend in detail
@@ -98,7 +110,7 @@ frontend/
 Global `ThrottlerGuard`: 20 requests / 60 s per client. `AuthController` overrides with 10 / 60 s and `POST /sentence/evaluate` with 40 / 60 s (a session can retry a lot). This protects the free OpenRouter quota and password guessing.
 
 ### Auth (`src/auth`)
-- `POST /auth/register`: email lowercased/trimmed, 409 if it exists, bcryptjs cost 10, creates `User` and an empty `Progress` in one nested create, returns `{ token, user: { id, email } }`.
+- `POST /auth/register`: email lowercased/trimmed, 409 if it exists, bcryptjs cost 10, creates `User` and an empty `Progress` in one nested create, returns `{ token, user: { id, email } }`. An optional `referralCode` (4-12 letters/digits, upper-cased before lookup) links the new user to the inviter through `User.referredById`; an unknown code is silently ignored so a typo never blocks sign-up.
 - `POST /auth/login`: same error ("Invalid email or password.") for unknown email and wrong password. Keep it that way to avoid account enumeration.
 - JWT: `JwtModule.registerAsync({ global: true })`, secret from `JWT_SECRET`, 7-day expiry, payload `{ sub, email }`. No refresh tokens.
 - `AuthGuard` parses `Authorization: Bearer <token>` and sets `req.user = { id, email }`. Controllers read `req.user.id`.
@@ -108,11 +120,12 @@ Global `ThrottlerGuard`: 20 requests / 60 s per client. `AuthController` overrid
 Constants: `STUDY_SECONDS = 180`, `XP_PER_LEVEL = 50`. Dates in this file are **UTC** (`ymd = toISOString().slice(0,10)`).
 
 - `snapshot(userId)` is what almost every endpoint returns: `{ email, xp, streak, longest, messages, premium, giftClaimed, language, nativeLanguage, level, today: string[] }`. `today` is the user's last 30 `PracticeEntry` texts for the UTC day, oldest first. If `lastDay` is more than 1 day before UTC today, `streak` is reported as 0 without writing to the DB.
+- `snapshot()` first calls `syncPremium`, one extra query on every endpoint that returns a snapshot (see Account).
 - `practice(text)`: in one transaction, `xp += 10`, `messages += 1`, insert `PracticeEntry` (text truncated to 1000). Returns a snapshot.
 - `addTime(seconds, day)`: `day` is the **browser's local date**. Rejected (400 "Invalid day") if more than 1 day away from UTC today. Upserts `PracticeDay` (increments seconds). Only when this call makes the day's total cross 180 seconds does the streak change: gap = days between `lastDay` and `day`; if `lastDay` is null or gap > 0, `streak = gap === 1 ? streak + 1 : 1`, `longest = max(...)`, `lastDay = day`.
 - `stats()`: `{ totalSeconds, studiedDays (days >= 180s), activeDays (days > 0s), days: last 400 PracticeDay rows oldest-first, achievements }`.
 - `settings(dto)`: updates `language` and `nativeLanguage` (any string up to 40 chars, not validated against the frontend list) and `level` (Beginner | Intermediate | Advanced). `ProgressModule` exports `ProgressService` because Sentence Mode calls `practice()`.
-- `unlockPremium()`: demo only, sets `premium = true` for anyone who calls it.
+- `unlockPremium()`: demo only. It now calls `startSubscription` (account module), which creates or restarts a 1-month **demo subscription**, sets `premium = true`, and pays out a pending referral reward. It still works for any logged-in user.
 - `claimGift()`: one-time +20 XP, guarded by `giftClaimed`.
 - `ensure(userId)` upserts a `Progress` row defensively before every operation.
 - Achievements are code, not data: the `ACHIEVEMENTS` array (ids `first_step`, `warm_up`, `on_a_roll`, `week`, `chatterbox`, `hour`, `level5`) is evaluated on each `stats()` call against facts (messages, longest streak, total seconds, studied days, level). Nothing is persisted per achievement.
@@ -152,29 +165,59 @@ All routes are behind `AuthGuard`. Nothing here checks `premium` (see gotcha 1).
 - `POST /sentence/complete` `{ skillId, scores: 1-5 ints (1..5 of them) }` -> `{ average, passed, percent, progress }`. Average is rounded to 1 decimal; `PASS_SCORE = 3` (exported from `sentence.service.ts`). Upserts `SentenceProgress` (keeps the best score, counts attempts, once `passed` stays `passed`) and calls `ProgressService.practice("Sentence Mode: <skill> (<avg>/5)")`, so each finished session gives +10 XP and a line in the daily feedback input.
 - Sentence generation costs 1 AI request and each pronunciation check 1 more, so one session is roughly 6-12 requests of the free quota.
 
+### Word Mode (`src/word`)
+All routes are behind `AuthGuard`. Nothing here checks `premium` (see gotcha 1).
+
+- **Catalog** (`word.catalog.ts`): `WORD_UNITS` = 10 units x 12 words (`TOTAL_WORDS` = 120). Each entry is an **English concept** with an emoji and a photo search term (`photo` defaults to the English word without a leading "to"). The AI turns the concept into the word in the learner's language, so one list serves every language. Word ids are URL slugs (`friend`, `to-laugh`, `train-station`) and the keys stored in `WordProgress`; never rename one with progress on it. Unit titles are only prompt context; the UI shows "Unit N".
+- `GET /word/units` -> `{ language, percent, passed, total, units: [{ number, title, words: [{ id, emoji, passed, bestScore, inProgress }] }] }`. `language` is `Progress.language`, and only rows for that language count, so progress is **per language** (German "friend" and French "friend" are separate lessons). `inProgress` means a row exists and `finished` is false; that is what makes the frontend show the resume popup.
+- `POST /word/start` `{ wordId, targetLanguage?, nativeLanguage?, level?, restart? }` -> `{ wordId, emoji, word, translation, sentences: [{ sentence, translation, note, chunks: [{ text, meaning, explanation }] }], step, scores, resumed, image }`.
+  - If an unfinished row with a valid saved lesson exists and `restart` is not true, it returns that saved lesson at the saved `step`/`scores` with `resumed: true` and **no AI call**.
+  - Otherwise it asks the AI (one request, `lessonSystem`, temperature 0.7, up to 2 attempts, 2 or 3 sentences accepted, fewer returns 502), fetches the photo in parallel, upserts the row (`step 0`, `scores []`, `finished false`) and returns `resumed: false`. A finished row is treated like no row, so opening a finished word makes a fresh lesson while keeping `passed` and `bestScore`.
+  - The prompt asks for `word` (with the article for languages that have one; verbs in the infinitive), its `translation` in the native language, and 3 sentences, each with `translation`, `note` and 2-3 `chunks` for the "Explain" popup. Output is validated and trimmed (`parseLesson`); chunks are optional.
+- `PATCH /word/lesson` `{ wordId, language, step 0-5, scores }` saves the position after every move. Scores are cleaned by `cleanScores` (integers 1-5 or `null`, at most the number of sentences). It is ignored if the row is missing or finished. Errors on the client are swallowed, so a failed save only loses the latest step.
+- `POST /word/complete` `{ wordId, language, scores }` -> `{ average, passed, percent, progress }`. Average of the non-null scores rounded to 1 decimal; `passed` needs at least one score and `average >= PASS_SCORE` (imported from `sentence.service.ts`). Upserts the row (`finished true`, `step` = sentence count, best score kept, `passed` once true stays true, `attempts` + 1) and calls `ProgressService.practice("Word Mode: <english> (<avg>/5)")` for +10 XP. If every sentence was skipped the run is closed but nothing is scored or rewarded.
+- **Pronunciation is not duplicated**: the lesson page calls the existing `POST /sentence/evaluate` (same word-match + AI rating flow, same 40/min throttle).
+- **Photos** (`word.images.ts`, `WordImageService`): when `PEXELS_API_KEY` is set, `GET https://api.pexels.com/v1/search?query=<photo>&per_page=1&orientation=landscape` with the key in `Authorization`; uses `src.large`, `photographer` and the photo `url` for the credit. Cached in memory for the life of the process; failures (non-2xx, timeout after 6 s) are not cached and return `null`, so the UI falls back to the emoji.
+- Cost: a new lesson is 1 AI request, each pronunciation attempt 1 more, a resume 0.
+
+### Account (`src/account`)
+All routes are behind `AuthGuard`. **Billing is not connected**: plans have no prices and nothing is charged; everything is demo logic so the Account page has something to manage.
+
+- **Personalization**: `GET /account/personalization` -> `{ values: { reason, frequency, goal, style, ageRange } (each string | null), questions: [{ key, label, options[] }] }`; `PATCH /account/personalization` takes any subset of the five keys and upserts the `Personalization` row. The question list lives only in `account.options.ts` (`QUESTIONS`): the DTO validates with `@IsIn(optionsFor(key))` and the frontend renders whatever the server returns. The answers are stored but **nothing reads them yet** (the AI prompts ignore them).
+- **Refer a friend**: `GET /account/referral` -> `{ code, invited, rewarded }`. The 6-character code (alphabet without look-alikes `0 O 1 I L`) is created lazily on the first call and stored in `User.referralCode` (unique; up to 5 retries on a Prisma `P2002` collision). `invited` counts users with `referredById = you`; `rewarded` counts those whose `referralRewarded` is true. The invite link is `<origin>/login?ref=<CODE>`.
+- **Reward**: when a referred user starts their first subscription, `rewardForReferral` flips the friend's `referralRewarded` with `updateMany ... where referralRewarded = false`, so a double click pays out once, then `grantFreeMonth` adds one month to **both** users' `currentPeriodEnd` (from `max(now, current end)`) and sets `premium = true`. A user with no plan gets a `canceled` 1-month plan, which does not renew. The claim and the grants are separate writes, so a failure in between loses the reward.
+- **Subscriptions**: one `Subscription` row per user: `months` (plan length), `status` (`active` | `paused` | `canceled`), `currentPeriodEnd` (the end of the period already paid for). `PLAN_MONTHS = [1, 3, 12, 24]` in `subscription.util.ts` (the frontend has its own copy). Endpoints: `GET /account/subscription` and `POST /account/subscription/{plan, pause, resume, cancel}`; all return `{ status: 'none' | 'active' | 'paused' | 'canceled', months, nextPayment, accessUntil, premium }`.
+  - `none` means no row, or a paused/cancelled plan whose `currentPeriodEnd` has passed.
+  - Active: `nextPayment` is `currentPeriodEnd` stepped forward in whole plans until it is in the future (`nextPayment()`); `accessUntil` is null. Paused/cancelled: `accessUntil = currentPeriodEnd`, `nextPayment` null.
+  - `plan` (`{ months }`, must be in `PLAN_MONTHS`) works while active or paused. `pause` needs active and moves `currentPeriodEnd` to the end of the paid period. `resume` needs paused. `cancel` works while active or paused and keeps access until the paid period ends. Wrong-state calls return 400.
+- **`syncPremium`** (`subscription.util.ts`): when a subscription exists, is not `active`, and has run out, it sets `Progress.premium = false`. It runs inside `ProgressService.snapshot` and `GET /account/subscription`. **Active plans never expire** (nothing renews or charges), and a user who got Premium from the old demo unlock without a `Subscription` row is never switched off.
+
 ### Database (`prisma/schema.prisma`)
-- `User(id cuid, email unique, name?, passwordHash, createdAt)`.
+- `User(id cuid, email unique, name?, passwordHash, createdAt, referralCode? unique, referredById? -> User (onDelete SetNull), referralRewarded Boolean)`. The self-relation is named `Referrals`.
 - `Progress(userId PK -> User, xp, streak, longest, messages, lastDay "YYYY-MM-DD"?, premium, giftClaimed, language default "Spanish", level default "Beginner", nativeLanguage default "English", updatedAt)`.
 - `PracticeEntry(id cuid, userId, day "YYYY-MM-DD" (UTC), text, createdAt)`, index on `(userId, day)`.
 - `PracticeDay(userId, day "YYYY-MM-DD" (browser local), seconds)`, composite PK `(userId, day)`.
 - `SentenceProgress(userId, skillId, bestScore Float, lastScore Float, attempts, passed, updatedAt)`, composite PK `(userId, skillId)`; `skillId` must match an id in `sentence.catalog.ts`.
-- All child relations `onDelete: Cascade`. Dates are stored as strings, not `DateTime`.
+- `Personalization(userId PK -> User, reason?, frequency?, goal?, style?, ageRange?)`: nullable strings holding the chosen option text.
+- `Subscription(userId PK -> User, months default 1, status default "active", currentPeriodEnd DateTime, createdAt, updatedAt)`.
+- `WordProgress(userId, wordId, language, lesson Json?, step, scores Json default [], finished, passed, bestScore, attempts, updatedAt)`, composite PK `(userId, wordId, language)`. `lesson` stores the generated lesson so a resume shows identical content; `finished` is the current run, `passed`/`bestScore` are lifetime.
+- All child relations `onDelete: Cascade` (except `referredBy`, which is `SetNull`). Dates are stored as strings, not `DateTime`.
 - Never edit an applied migration. Change the schema, then run `npx prisma migrate dev --name <change>` and commit the generated folder.
 
 ## Frontend in detail
 
 ### Shell and routing
-- `/` redirects to `/dashboard`. `/login` toggles between login and register and **clears the token on mount**, so visiting it logs you out.
-- `app/dashboard/page.tsx` (client component) holds all state: `Progress` snapshot `s`, active tab, open mode, upsell/feedback/account modals, toast. It redirects to `/login` if there is no token, loads `/progress`, and shows a retry screen on failure.
-- Sidebar tabs: Home, Courses, Explore, Premium, Progress. Courses and Explore render a "This section isn't built yet" placeholder; Premium opens the upsell modal. The sidebar is `hidden md:flex`, so **on screens below `md` there is no navigation** (no way to reach Progress, Account or the gift). Fix this if mobile matters.
+- `/` redirects to `/dashboard`. `/login` toggles between login and register and **clears the token on mount**, so visiting it logs you out. With `/login?ref=CODE` it opens the register form, shows "Invite code CODE applied." and sends `referralCode` with the registration.
+- `app/dashboard/page.tsx` (client component) holds all state: `Progress` snapshot `s`, active tab, open mode, upsell/feedback modals, toast. It redirects to `/login` if there is no token, loads `/progress`, and shows a retry screen on failure.
+- Sidebar tabs: Home, Courses, Explore, Premium, Progress, plus **Account** at the bottom (`active === "account"` renders `AccountView` in the main area; the old Account modal with only a Log out button is gone). Courses and Explore render a "This section isn't built yet" placeholder; Premium opens the upsell modal. The sidebar is `hidden md:flex`, so **on screens below `md` there is no navigation** (no way to reach Progress, Account or the gift). Fix this if mobile matters.
 - The sidebar logo is a button: it returns to the Home tab, closes any open mode and pushes `/dashboard`. On Sentence Mode pages the shared `Logo` is a link to `/dashboard`. The dashboard also honours `?tab=progress` on load (the Sentence sidebar's Progress link uses it).
 - Home has three selects: **My language** (`nativeLanguage`, what translations and feedback are written in), the language being learned, and level. All PATCH `/progress/settings`.
 - Home lists `MODES` from `lib/modes.ts`. Only Chat is free; the other 9 show a lock and open the upsell modal unless `s.premium`. The upsell button calls the demo `POST /progress/premium`. Language and level selects update state optimistically and PATCH `/progress/settings`.
-- Mode routing in the dashboard uses hard-coded id arrays: chat/call/roleplay/characters/debate -> `ChatPanel`; word/dialogue/flashcards -> `GeneratePanel`; photo -> `PhotoPanel`. **Sentence is the exception**: `clickMode` does `router.push("/sentence")` (after the Premium check) instead of opening a modal. The `"sentence"` entries left in the `GeneratePanel` array and generate types are legacy and unreachable from Home. `FeedbackModal` (defined at the bottom of the dashboard file) calls `/ai/feedback` with `s.today`.
-- `PracticeTimer` is mounted **only while a mode modal is open, or inside `/sentence/*`** (`SentenceProvider` mounts it), so practice time is counted only inside a mode.
+- Mode routing in the dashboard uses hard-coded id arrays: chat/call/roleplay/characters/debate -> `ChatPanel`; dialogue/flashcards -> `GeneratePanel`; photo -> `PhotoPanel`. **Sentence and Word are the exceptions**: `clickMode` does `router.push("/sentence")` or `router.push("/word")` (after the Premium check) instead of opening a modal. The `"sentence"` and `"word"` entries left in the `GeneratePanel` array and generate types are legacy and unreachable from Home. `FeedbackModal` (defined at the bottom of the dashboard file) calls `/ai/feedback` with `s.today`.
+- `PracticeTimer` is mounted **only while a mode modal is open, or inside `/sentence/*` and `/word/*`** (`SentenceProvider` and `WordProvider` mount it), so practice time is counted only inside a mode.
 
 ### `lib/api.ts`
-Single API client. `BASE` = `NEXT_PUBLIC_API_URL`. Token key `talkmate-token` in `localStorage`. `request()` adds the Bearer header, turns network failure into "Can't reach the server...", flattens Nest validation message arrays, and on any 401 (when a token existed) clears it and hard-redirects to `/login`. `keepalive` is used for the final timer flush on unmount. Exports types `Msg`, `ChatMode`, `GenerateType`, `Learner` (`targetLanguage`, `level`, optional `nativeLanguage`), `Progress` (now includes `nativeLanguage`), `Stats`, `Achievement`, the Sentence types (`SentenceUnits`, `SentenceSkill`, `SentenceItem`, `PronunciationResult`), and the `api` object, including `api.sentence.{units, session(skillId, learner), evaluate, complete}`.
+Single API client. `BASE` = `NEXT_PUBLIC_API_URL`. Token key `talkmate-token` in `localStorage`. `request()` adds the Bearer header, turns network failure into "Can't reach the server...", flattens Nest validation message arrays, and on any 401 (when a token existed) clears it and hard-redirects to `/login`. `keepalive` is used for the final timer flush on unmount. Exports types `Msg`, `ChatMode`, `GenerateType`, `Learner` (`targetLanguage`, `level`, optional `nativeLanguage`), `Progress` (now includes `nativeLanguage`), `Stats`, `Achievement`, the Sentence types (`SentenceUnits`, `SentenceSkill`, `SentenceItem`, `PronunciationResult`), and the `api` object, including `api.sentence.{units, session(skillId, learner), evaluate, complete}` `api.word.{units, start(wordId, learner + restart), save, complete}` (types `WordUnits`, `WordStar`, `WordLesson`, `WordSentence`, `SentenceChunk`), and `api.account.{personalization, savePersonalization, referral, subscription, changePlan, pause, resume, cancel}`. Account types: `PersonalizationData`, `Referral`, `SubscriptionInfo`. `api.auth.register` accepts `referralCode`.
 
 ### Components
 - `ChatPanel`: message list, text input, and (Call mode) a mic button using `SpeechRecognition`/`webkitSpeechRecognition` (Chrome-first) and `speechSynthesis` to read replies aloud, with the language mapped through `SPEECH_LANG`. Sends the last 20 messages. Always sends the full `context` object (scenario, character, topic, stance) regardless of mode. Changing scenario/character/topic/stance clears the conversation. After each successful reply it calls `onPractice(userText)`, which logs the learner's message and awards 10 XP. Scenario, character and topic option lists are constants at the top of the file.
@@ -182,12 +225,17 @@ Single API client. `BASE` = `NEXT_PUBLIC_API_URL`. Token key `talkmate-token` in
 - `PhotoPanel`: client-side resize to max 800 px JPEG (quality 0.8) via canvas, then POST. Only logs practice when the learner typed a description.
 - `ProgressView`: fetches `/progress/stats` (refetches when `s.messages` or `s.streak` change). Cards for Stats, streak, a 1- or 5-week calendar (a day is "studied" at >= 180 s), an inline-SVG `AreaChart` (7 / 28 days / all time), level bar, Share (navigator.share or clipboard), a Certificates placeholder ("Courses not built yet"), and Achievements (first 4 unlocked, "See all" modal). `ICONS` maps achievement ids to lucide icons.
 - `components/sentence/SentenceProvider.tsx`: wraps every `/sentence/*` page. Redirects to `/login` without a token and to `/dashboard` when `premium` is false (UI-only gate), loads `/progress` and `/sentence/units` once, mounts `PracticeTimer`, and exposes `useSentence()` = `{ progress, units, unitsError, reloadUnits }`.
-- `components/sentence/SentenceShell.tsx`: fixed sidebar (Home, Progress, Log out; hidden below `md`) plus a centred column with a back link, and the exported `Logo`.
+- `components/account/*`: see "Account page" below.
+- `components/word/WordProvider.tsx`: the same gate as `SentenceProvider` (login, Premium redirect, `PracticeTimer`) for `/word/*`, loading `/progress` and `/word/units`; exposes `useWord()` = `{ progress, units, unitsError, reloadUnits }`.
+- `components/PronunciationReview.tsx`: `Stars`, `ColoredSentence` (green matched / red missed words) and `Review` (stars, feedback, tip, "We heard", Try again, Next/Finish). Used by Word Mode only; the Sentence practice page keeps its own copies.
+- `components/sentence/SentenceShell.tsx` (also used by the Word pages for the sidebar and back link): fixed sidebar (Home, Progress, Log out; hidden below `md`) plus a centred column with a back link, and the exported `Logo`.
 - `Modal.tsx` exports `Modal` (backdrop click and Escape close, `wide` prop), `Select` and `ErrorText`.
 - `PracticeTimer`: renders nothing; counts 1 s ticks while `document.visibilityState === "visible"`, flushes every 30 s (capped at 60 s per request) and once on unmount, calling `api.progress.time(seconds, localDay())`.
 - `lib/dates.ts`: local-date helpers (`ymd`, `localDay`, `parseDay`, `addDays`, `startOfWeek` = Monday, `shortDate`).
 - `lib/modes.ts`: `MODES` (id, title, desc, emoji, premium), `LANGUAGES` (12), `LEVELS`, `SPEECH_LANG`.
 - `lib/speech.ts`: browser-only helpers: `supportsSpeechRecognition`, `createRecognition(lang)` (interim results, not continuous), `speak(text, lang, rate, onEnd)`, `hasVoiceFor(lang)`, `cancelSpeech`.
+- `lib/word.ts`: `useWordId()` (same URL-path fallback as `useSkillId`) and `nextWordId(units, id)` (the next star, for "Next word").
+- `lib/usePronunciation.ts`: hook `{ mic, live, error, setError, canListen, start(sentence), stop }`: browser `SpeechRecognition` -> `api.sentence.evaluate` -> `onResult`. It repeats the logic inside the Sentence practice page, which was left unchanged.
 - `lib/sentence.ts`: `useSkillId()` (reads the id from the URL path, so it works even if the folder is not named exactly `[skillId]`), `sessionKey(skillId, language, level, native)`, `loadPrefs`/`savePrefs`, `SCORE_LABEL`, `PASS_SCORE`.
 
 ### Sentence Mode pages (`app/sentence`)
@@ -202,6 +250,28 @@ Flow: Home -> `/sentence` -> `/sentence/<skillId>` -> `/sentence/<skillId>/pract
   - Mic: browser `SpeechRecognition` (live transcript, ends on pause) -> `api.sentence.evaluate`. The sentence is then coloured word by word (green matched, red missed), with stars, feedback, tip, and "We heard: ...". **Try again** clears the result; **Next/Finish** advances; **Skip** records the sentence as skipped (not scored).
   - Finishing calls `api.sentence.complete` with the scores of non-skipped sentences (nothing is saved if all were skipped) and shows a summary with Practise again / Back to units, then reloads the unit list.
   - Warns when the browser has no voice for the language (`hasVoiceFor`) or no speech recognition.
+
+### Word Mode pages (`app/word`)
+Flow: Home -> `/word` -> `/word/<wordId>`. Both share `WordProvider` via `app/word/layout.tsx`; the sidebar and back link come from `SentenceShell`.
+
+- `/word`: description, progress pill (`percent`), then 10 unit boxes with a "Unit N" pill and an `x/12` counter, 6 stars per row. Star states: gold = passed, outlined with a dot = in progress, dim = not started. Clicking an **in-progress** star opens the "Ready to get back?" popup (Continue the exercise -> `/word/<id>`, Start over -> `/word/<id>?restart=1`); any other star goes straight to `/word/<id>` with no popup.
+- `/word/<wordId>` (full screen): calls `api.word.start(wordId, { ...learner, restart })`. The `restart` flag is read from `?restart=1` and **removed from the URL immediately**, so a refresh resumes instead of restarting. The page reloads when the word id changes (Next word). "Try again" after a failed load repeats the same intent (resume or start over).
+  - A progress track with one stop for the word card and one per sentence (4 stops for 3 sentences).
+  - **Step 0, word card**: photo (or the emoji tile when there is no photo or the image fails), the word, a play button, the translation, a Pexels credit line when a photo is shown, **Continue**.
+  - **Steps 1..n, sentences**: header "word - translation", "Read out loud", Replay, **Explain** (a popup with the sentence and each chunk's meaning and explanation, falling back to the sentence note when there are no chunks), translation (toggle in settings), mic and Skip. After a rating: coloured words, `Review`, Try again, Next/Finish.
+  - Every move calls `api.word.save` with `{ step, scores }` (best effort). A rating is saved as soon as it arrives, so closing after rating still keeps the score. Closing (X) goes to `/word`; reopening shows the popup.
+  - Finishing calls `api.word.complete` and shows a summary: stars and average, "Word learned!" or "Keep practising" (needs 3.0), each sentence's stars, then Next word / Practise again (restart) / Back to words. The star grid is reloaded.
+  - Speaker toggle and settings (slow speech, show translation) reuse the Sentence Mode preferences in `localStorage` `talkmate-sentence-prefs`. Voice is the browser's `speechSynthesis`.
+
+### Account page (`components/account`)
+`AccountView` (props: `s`, `onLanguage`, `onLogout`, `onToast`, `onSnapshot`) keeps a local `view` state (`menu` | sub-page) instead of using routes, so Account is always `/dashboard` with the Account tab active.
+
+- **Menu**: a Target language card (opens a modal listing `LANGUAGES` with two-letter badges, since Windows does not draw flag emoji; choosing one calls `onLanguage` -> `updateSettings({ language })`, the same PATCH as the Home select), then rows for Profile, Personalization, Settings, Subscriptions, Refer a friend, For organizations, Support and Log out, plus a footer of legal titles that are plain text, not links.
+- **Not built**: Profile, Settings, For organizations and Support render `SubPage` with "This section isn't built yet."
+- `PersonalizationView`: loads `GET /account/personalization` and renders a `<select>` per server-supplied question. Each change is saved on its own (`PATCH`), updated optimistically, rolled back with a toast if saving fails.
+- `ReferView`: read-only invite link field with a copy button (clipboard failure shows a toast asking to copy by hand), the "invited / rewarded" counts, and a three-step explainer.
+- `SubscriptionView`: shows one of three states. With no plan: a "Get Premium (demo)" button that calls `api.progress.premium()` (starting a demo plan) and reloads the subscription. With a plan: a card with plan length and the next payment or access-until date, Change plan (modal with the four lengths), Pause/Resume, Cancel (confirmation modal), and Resubscribe when cancelled. After every action, and once on mount, it re-fetches `/progress` and passes it to `onSnapshot`, because the Premium flag can change (a lapsed plan switches it off). A note says billing is not connected.
+- `SubPage` is the shared back-arrow header. Toasts go through the dashboard's `setToast`.
 
 ### Styling and TypeScript
 Tailwind utility classes only (`globals.css` is just the three directives). Dark theme: page `bg-[#16161c]`, cards `bg-[#1f1f27]`, indigo-600 primary, pink accents for premium, `white/10` surfaces. Keep new UI consistent with this. `tsconfig` is `strict`; path alias `@/*` = frontend root. Client components start with `"use client"`. Frontend uses double quotes and 2-space indent; backend uses single quotes.
@@ -218,13 +288,19 @@ Tailwind utility classes only (`globals.css` is just the three directives). Dark
 
 **Add or change a Sentence Mode skill**: edit `SENTENCE_UNITS` in `backend/src/sentence/sentence.catalog.ts` (no DB change). Add new skills with new ids; renaming or deleting an id orphans users' `SentenceProgress` rows and drops them from the percentage.
 
-**Change the Sentence Mode pass mark or scoring**: `PASS_SCORE` is in `sentence.service.ts` **and** `frontend/lib/sentence.ts`; the similarity-to-score thresholds are in `anchorScore` (`sentence.scoring.ts`); prompts are in `sentence.prompts.ts`.
+**Add or change a Word Mode word**: edit `WORD_UNITS` in `backend/src/word/word.catalog.ts` (no DB change). Keep 12 per unit for the grid (the UI draws whatever the server sends in 6 columns). Add new words with new ids; renaming or removing an id orphans `WordProgress` rows. Use the third argument to `w(...)` to improve the photo search.
+
+**Change the Sentence Mode pass mark or scoring**: `PASS_SCORE` is in `sentence.service.ts` (Word Mode imports it from there) **and** `frontend/lib/sentence.ts`; the similarity-to-score thresholds are in `anchorScore` (`sentence.scoring.ts`); prompts are in `sentence.prompts.ts`.
+
+**Add a Personalization question**: add an entry to `QUESTIONS` in `backend/src/account/account.options.ts`, add its key to `PersonalizationDto` (`account.dto.ts`) and to the `Personalization` model, then run a migration. The frontend renders it automatically. Nothing uses the answers until you wire them into prompts.
+
+**Change plan lengths**: `PLAN_MONTHS` in `backend/src/account/subscription.util.ts` and `PLANS` in `SubscriptionView.tsx`.
 
 **Add an API field**: DTO (validators) -> service -> `lib/api.ts` types/helpers -> callers. Remember `whitelist: true` drops undeclared fields.
 
 ## Known issues and gotchas
 
-1. **Premium is only enforced in the UI.** Backend `/ai/*` routes never check `premium`, and `/progress/premium` unlocks any logged-in user. Needs real billing and server-side gating before launch.
+1. **Premium is only enforced in the UI.** Backend `/ai/*` and `/sentence/*` routes never check `premium`, and `/progress/premium` unlocks any logged-in user (it now also starts a demo subscription). Needs real billing and server-side gating before launch.
 2. **Two day systems.** `PracticeEntry.day` and the streak-lapse check use UTC; `PracticeDay.day`, streak increments and the calendar use the browser's local date. Do not mix them; the +/-1 day tolerance in `addTime` exists because of this.
 3. **Streak depends on timer seconds, not messages.** Sending messages gives XP but never extends the streak; 180 s of visible-tab time inside an open mode does.
 4. **XP farming**: every Regenerate and every message gives +10 XP with no limit other than the 20 req/min throttle.
@@ -241,9 +317,14 @@ Tailwind utility classes only (`globals.css` is just the three directives). Dark
 15. **Sentence Mode trusts the browser.** `POST /sentence/complete` accepts whatever scores the client sends, so a user can fake a pass. Premium is not checked on `/sentence/*` either (extends gotcha 1).
 16. **Pronunciation is judged on browser speech-to-text, not on audio.** Recognition quality varies by browser and language (Bengali is weaker in Chrome's recogniser), so a correctly spoken word can be marked wrong. Replay uses the browser's installed voices: Chrome has no Bengali voice (the page shows a warning); Edge ships natural online voices. An audio-capable model or server-side text-to-speech would fix this but was deliberately not added.
 17. **Free-quota burn.** A Sentence session costs roughly 6-12 OpenRouter requests, so the 50/day free cap can run out after a few sessions (see Environment variables). Starting a skill always generates new sentences; nothing is cached server-side.
-18. **`PASS_SCORE` is duplicated** in `sentence.service.ts` and `frontend/lib/sentence.ts`.
-19. **Legacy `sentence` generate type**: still supported by `/ai/generate` and `GeneratePanel`, but Home no longer opens it.
-20. **Unnamed migration folder**: `20261015073124_` (the nativeLanguage column). Applied migrations must not be renamed.
+18. **`PASS_SCORE` is duplicated** in `sentence.service.ts` and `frontend/lib/sentence.ts` (the backend Word Mode shares the first).
+19. **Legacy `sentence` and `word` generate types**: still supported by `/ai/generate` and `GeneratePanel`, but Home no longer opens them.
+20. **Unnamed migration folders**: `20261015073124_` (the nativeLanguage column) and `20261017110133_` (the Account tables). Applied migrations must not be renamed.
+21. **Subscriptions are a demo.** No payment provider, no prices, no renewals: an active plan never expires, "next payment" is just a computed date, and the "update payment method" link only shows a toast. Real billing needs a provider, webhooks and server-side Premium checks.
+22. **Old demo-unlocked Premium never expires**: `syncPremium` only acts when a `Subscription` row exists, so users unlocked before the Account page existed stay Premium and see "Premium is on from the earlier demo unlock".
+23. **Referral rewards can be farmed.** There is no email verification or limit, so one person can create accounts with their own link and start demo subscriptions to collect free months. Fix before real money is involved.
+24. **Personalization answers are collected but unused**, and several Account rows (Profile, Settings, For organizations, Support, the legal footer) are placeholders.
+25. **`PLAN_MONTHS` is duplicated** in the backend (`subscription.util.ts`) and `SubscriptionView.tsx`.
 
 ## Working agreements for Claude
 
@@ -252,3 +333,9 @@ Tailwind utility classes only (`globals.css` is just the three directives). Dark
 - After backend changes run `npm run build` in `backend/`; after frontend changes run `npm run build` in `frontend/`. State clearly if you could not run them.
 - Never commit secrets; `.env` and `.env.local` are git-ignored.
 - Do not edit applied Prisma migrations or `package-lock.json` by hand.
+26. **Word Mode trusts the browser** the same way Sentence Mode does: `/word/complete` and `/word/lesson` accept whatever scores the client sends, and `/word/*` does not check Premium on the server.
+27. **Word lessons are only as good as the AI.** The word in the target language, its article and the translation come from a free model with no review, and the 120-word list is a first draft. Check Bengali and the other languages by hand.
+28. **A saved lesson is not refreshed** when the learner changes "My language" or level partway through; "Start over" makes a new one. Progress is stored per target language, not per native language.
+29. **Photos are optional and in memory**: without `PEXELS_API_KEY` every word shows an emoji, and the photo cache is lost on restart (one Pexels request per word per run). Pexels asks for a credit; the lesson page shows one.
+30. **Word Mode copies the mic logic** into `usePronunciation`; the Sentence practice page still has its own copy. A bug fixed in one must be fixed in the other, or the Sentence page should be moved onto the hook.
+31. **`WordProgress` needs a migration**: run `npx prisma migrate dev --name word_mode` (the download ships no SQL). Without the table `/word/*` fails with a Prisma error.
