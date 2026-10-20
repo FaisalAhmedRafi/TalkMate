@@ -5,11 +5,13 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AccountModule } from './account/account.module';
 import { AiModule } from './ai/ai.module';
 import { AuthModule } from './auth/auth.module';
+import { CharactersModule } from './characters/characters.module';
 import { DebateModule } from './debate/debate.module';
 import { DialogueModule } from './dialogue/dialogue.module';
 import { FlashcardModule } from './flashcard/flashcard.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProgressModule } from './progress/progress.module';
+import { RoleplayModule } from './roleplay/roleplay.module';
 import { SentenceModule } from './sentence/sentence.module';
 import { WordModule } from './word/word.module';
 
@@ -36,6 +38,8 @@ class HealthController {
     FlashcardModule,
     DialogueModule,
     DebateModule,
+    CharactersModule,
+    RoleplayModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

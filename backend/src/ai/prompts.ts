@@ -27,12 +27,6 @@ export function chatSystem(mode: ChatMode, l: Learner, ctx: ContextDto = {}): st
         `${teacher(l)} Play the other person (e.g. waiter, receptionist) and stay in character. ` +
         `Keep each reply to 1-3 sentences. If the learner makes a mistake, add a short "(Tip: ...)" at the end.`
       );
-    case 'characters':
-      return (
-        `Play the character "${ctx.character ?? 'Cleopatra'}" in a fun, age-appropriate conversation in ${l.targetLanguage}. ` +
-        `${teacher(l)} Stay in the character's voice, keep replies to 2-3 sentences, and invite the learner to keep talking. ` +
-        `You are role-playing; do not claim to be the real person.`
-      );
     case 'debate': {
       const user = ctx.stance ?? 'for';
       const ai = user === 'for' ? 'against' : 'for';

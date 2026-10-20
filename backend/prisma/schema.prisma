@@ -21,6 +21,8 @@ model User {
   flashcards   FlashcardDeck[]
   dialogues    DialogueProgress[]
   debates      DebateSession[]
+  characters   CharacterSession[]
+  roleplays    RoleplaySession[]
 
   referralCode     String?          @unique // the code in the user's invite link
   referredById     String?
@@ -108,6 +110,20 @@ model DebateSession {
   @@id([userId, topicId, side, language])
 }
 
+model CharacterSession {
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  characterId  String // matches an id in src/characters/characters.catalog.ts
+  language     String // the language being learned, so each language has its own conversation
+  messages     Json     @default("[]") // [{ role, content }], starting with the character's opening
+  reviews      Json     @default("{}") // { "<message index>": { correct, corrected, explanation, translation } }
+  translations Json     @default("{}") // { "<message index>": "text in the learner's native language" }
+  count        Int      @default(0) // messages the learner has sent
+  updatedAt    DateTime @updatedAt
+
+  @@id([userId, characterId, language])
+}
+
 model Personalization {
   userId    String  @id
   user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -159,4 +175,18 @@ model FlashcardDeck {
   updatedAt DateTime @updatedAt
 
   @@id([userId, topicId, language])
+}
+
+model RoleplaySession {
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scenarioId   String // matches an id in src/roleplay/roleplay.catalog.ts
+  language     String // the language being learned, so each language has its own chat
+  messages     Json     @default("[]") // [{ role, content }], starting with the partner's opening line
+  reviews      Json     @default("{}") // { "<message index>": { correct, corrected, explanation, translation } }
+  translations Json     @default("{}") // { "<message index>": "text in the learner's native language" }
+  count        Int      @default(0) // messages the learner has sent
+  updatedAt    DateTime @updatedAt
+
+  @@id([userId, scenarioId, language])
 }

@@ -4,7 +4,7 @@ import {
   Matches, Max, MaxLength, Min, ValidateNested,
 } from 'class-validator';
 
-export const CHAT_MODES = ['chat', 'call', 'roleplay', 'characters', 'debate'] as const;
+export const CHAT_MODES = ['chat', 'call', 'roleplay', 'debate'] as const;
 export const GENERATE_TYPES = ['sentence', 'word', 'dialogue', 'flashcards'] as const;
 export type ChatMode = (typeof CHAT_MODES)[number];
 export type GenerateType = (typeof GENERATE_TYPES)[number];
@@ -22,7 +22,6 @@ export class MessageDto {
 
 export class ContextDto {
   @IsOptional() @IsString() @MaxLength(120) scenario?: string;
-  @IsOptional() @IsString() @MaxLength(80) character?: string;
   @IsOptional() @IsString() @MaxLength(160) topic?: string;
   @IsOptional() @IsIn(['for', 'against']) stance?: 'for' | 'against';
 }

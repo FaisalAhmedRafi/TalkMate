@@ -6,7 +6,7 @@ export const setToken = (t: string) => localStorage.setItem(TOKEN_KEY, t);
 export const clearToken = () => localStorage.removeItem(TOKEN_KEY);
 
 export type Msg = { role: "user" | "assistant"; content: string };
-export type ChatMode = "chat" | "call" | "roleplay" | "characters" | "debate";
+export type ChatMode = "chat" | "call" | "roleplay" | "debate";
 export type GenerateType = "sentence" | "word" | "dialogue" | "flashcards";
 export type Learner = { targetLanguage: string; level: string; nativeLanguage?: string };
 export type Achievement = { id: string; name: string; description: string; unlocked: boolean };
@@ -51,6 +51,34 @@ export type DebateFeedback = { correct: boolean; corrected: string; explanation:
 /** A saved debate: the conversation plus the reviews and translations keyed by message index */
 export type DebateSaved = {
   intro: DebateStart; messages: Msg[]; reviews: Record<string, DebateFeedback>; translations: Record<string, string>;
+};
+export type CharacterKind = "history" | "myth" | "fiction";
+export type CharacterInfo = {
+  id: string; name: string; emoji: string; hue: number; kind: CharacterKind; about: string;
+  saved: number; // learner messages in the saved conversation (0 = none)
+};
+export type CharacterList = { total: number; talked: number; characters: CharacterInfo[] };
+export type CharacterStart = { characterId: string; name: string; emoji: string; hue: number; about: string; opening: string };
+/** One learner message checked by the AI: corrected is empty when the message was fine */
+export type CharacterFeedback = { correct: boolean; corrected: string; explanation: string; translation: string };
+/** A saved conversation: the messages plus the reviews and translations keyed by message index */
+export type CharacterSaved = {
+  intro: CharacterStart; messages: Msg[]; reviews: Record<string, CharacterFeedback>; translations: Record<string, string>;
+};
+export type RoleplayCategory = "Social" | "Transport" | "Travel" | "Food" | "Shopping";
+export type RoleplayPartner = { name: string; emoji: string };
+export type RoleplayScenarioInfo = {
+  id: string; title: string; category: RoleplayCategory; emoji: string; cover: string | null;
+  scenario: string; tasks: string[]; partner: RoleplayPartner;
+  practiced: boolean; saved: number; // saved = learner messages in the unfinished chat
+};
+export type RoleplayScenarios = { total: number; practiced: number; scenarios: RoleplayScenarioInfo[] };
+export type RoleplayStart = { scenarioId: string; title: string; scenario: string; tasks: string[]; partner: RoleplayPartner; opening: string };
+/** One learner message checked by the AI: corrected is empty when the message was fine */
+export type RoleplayFeedback = { correct: boolean; corrected: string; explanation: string; translation: string };
+/** A saved chat: the conversation plus the reviews and translations keyed by message index */
+export type RoleplaySaved = {
+  intro: RoleplayStart; messages: Msg[]; reviews: Record<string, RoleplayFeedback>; translations: Record<string, string>;
 };
 export type FlashStatus = "new" | "learning" | "known";
 export type FlashCard = {
@@ -190,6 +218,44 @@ export const api = {
     clear: (topicId: string, side: DebateSide) =>
       request<{ ok: boolean }>("DELETE", `/debate/session?topicId=${encodeURIComponent(topicId)}&side=${side}`),
     translate: (b: Learner & { text: string }) => post<{ translation: string }>("/debate/translate", b),
+  },
+  characters: {
+    list: () => request<CharacterList>("GET", "/characters"),
+    /** Opens a conversation: the character's first message */
+    start: (characterId: string, b: Learner) => {
+      if (!characterId) throw new Error("Couldn't tell which character to open. Go back and pick one.");
+      return post<CharacterStart>("/characters/start", { ...b, characterId });
+    },
+    /** The character's answer; messages start with the opening and end with the learner's new message */
+    reply: (b: Learner & { characterId: string; messages: Msg[] }) => post<{ reply: string }>("/characters/reply", b),
+    feedback: (b: Learner & { message: string }) => post<CharacterFeedback>("/characters/feedback", b),
+    /** The saved conversation with a character, or null */
+    session: (characterId: string) =>
+      request<{ session: CharacterSaved | null }>("GET", `/characters/session?characterId=${encodeURIComponent(characterId)}`),
+    save: (b: { characterId: string; messages: Msg[]; reviews: Record<string, CharacterFeedback>; translations: Record<string, string> }) =>
+      request<{ ok: boolean }>("PUT", "/characters/session", b),
+    clear: (characterId: string) =>
+      request<{ ok: boolean }>("DELETE", `/characters/session?characterId=${encodeURIComponent(characterId)}`),
+    translate: (b: Learner & { text: string }) => post<{ translation: string }>("/characters/translate", b),
+  },
+  roleplay: {
+    scenarios: () => request<RoleplayScenarios>("GET", "/roleplay/scenarios"),
+    /** Opens a scenario: the partner's first line */
+    start: (scenarioId: string, b: Learner) => {
+      if (!scenarioId) throw new Error("Couldn't tell which roleplay to open. Go back and pick one.");
+      return post<RoleplayStart>("/roleplay/start", { ...b, scenarioId });
+    },
+    /** The partner's answer; messages start with the opening line and end with the learner's new message */
+    reply: (b: Learner & { scenarioId: string; messages: Msg[] }) => post<{ reply: string }>("/roleplay/reply", b),
+    feedback: (b: Learner & { message: string }) => post<RoleplayFeedback>("/roleplay/feedback", b),
+    /** The saved chat for a scenario, or null */
+    session: (scenarioId: string) =>
+      request<{ session: RoleplaySaved | null }>("GET", `/roleplay/session?scenarioId=${encodeURIComponent(scenarioId)}`),
+    save: (b: { scenarioId: string; messages: Msg[]; reviews: Record<string, RoleplayFeedback>; translations: Record<string, string> }) =>
+      request<{ ok: boolean }>("PUT", "/roleplay/session", b),
+    clear: (scenarioId: string) =>
+      request<{ ok: boolean }>("DELETE", `/roleplay/session?scenarioId=${encodeURIComponent(scenarioId)}`),
+    translate: (b: Learner & { text: string }) => post<{ translation: string }>("/roleplay/translate", b),
   },
   chat: (b: Learner & { mode: ChatMode; messages: Msg[]; context?: Record<string, string> }) =>
     post<{ reply: string }>("/ai/chat", b),

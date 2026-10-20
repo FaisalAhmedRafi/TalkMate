@@ -6,7 +6,6 @@ import { api, type ChatMode, type Learner, type Msg } from "@/lib/api";
 import { SPEECH_LANG } from "@/lib/modes";
 
 const SCENARIOS = ["Ordering at a restaurant", "Checking into a hotel", "Asking for directions", "A job interview", "Shopping for clothes"];
-const CHARACTERS = ["Cleopatra", "Sherlock Holmes", "Albert Einstein", "Leonardo da Vinci"];
 const TOPICS = ["Should homework be banned?", "Is remote work better than office work?", "Should cities ban cars downtown?"];
 
 export function ChatPanel({ mode, title, learner, onPractice, onClose }: {
@@ -18,13 +17,12 @@ export function ChatPanel({ mode, title, learner, onPractice, onClose }: {
   const [error, setError] = useState<string | null>(null);
   const [listening, setListening] = useState(false);
   const [scenario, setScenario] = useState(SCENARIOS[0]);
-  const [character, setCharacter] = useState(CHARACTERS[0]);
   const [topic, setTopic] = useState(TOPICS[0]);
   const [stance, setStance] = useState("for");
   const end = useRef<HTMLDivElement>(null);
 
-  const ctxKey = mode === "roleplay" ? scenario : mode === "characters" ? character : mode === "debate" ? topic + stance : "";
-  const context = useMemo(() => ({ scenario, character, topic, stance }), [scenario, character, topic, stance]);
+  const ctxKey = mode === "roleplay" ? scenario : mode === "debate" ? topic + stance : "";
+  const context = useMemo(() => ({ scenario, topic, stance }), [scenario, topic, stance]);
 
   useEffect(() => { setMsgs([]); setError(null); }, [ctxKey]);
   useEffect(() => { end.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs, busy]);
@@ -74,7 +72,6 @@ export function ChatPanel({ mode, title, learner, onPractice, onClose }: {
 
       <div className="mt-3 flex flex-wrap gap-2">
         {mode === "roleplay" && <Select label="Scenario" value={scenario} onChange={setScenario} options={SCENARIOS} />}
-        {mode === "characters" && <Select label="Character" value={character} onChange={setCharacter} options={CHARACTERS} />}
         {mode === "debate" && (
           <>
             <Select label="Topic" value={topic} onChange={setTopic} options={TOPICS} />

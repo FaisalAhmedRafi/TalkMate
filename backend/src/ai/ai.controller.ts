@@ -8,7 +8,7 @@ import { ChatDto, FeedbackDto, GenerateDto, PhotoDto } from './dto';
 export class AiController {
   constructor(private readonly ai: AiService) {}
 
-  /** Chat, Call, Roleplays, Characters, Debates */
+  /** Chat, Call, Roleplays (Characters and Debates have their own modules) */
   @Post('chat') chat(@Body() dto: ChatDto) { return this.ai.chat(dto); }
 
   /** Sentence, Word, Dialogue, Flashcards (returns JSON study material) */

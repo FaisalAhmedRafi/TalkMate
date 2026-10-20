@@ -38,7 +38,8 @@ All routes except `/auth/*` and `/health` need `Authorization: Bearer <token>`.
 | `PATCH /progress/settings` | Language and level |
 | `POST /progress/premium` | Demo unlock (replace with real billing) |
 | `POST /progress/gift` | One-time +20 XP |
-| `POST /ai/chat` | Chat, Call, Roleplays, Characters, Debates |
+| `POST /ai/chat` | Chat, Call, Characters |
+| `/roleplay/*` | Roleplays: scenarios, saved chats, start, reply, feedback, translate |
 | `POST /ai/generate` | Sentence, Word, Dialogue, Flashcards |
 | `POST /ai/photo` | Photo Mode |
 | `POST /ai/feedback` | Daily feedback |
