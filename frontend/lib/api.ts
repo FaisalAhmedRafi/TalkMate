@@ -38,13 +38,20 @@ export type DialogueTopics = { percent: number; passed: number; total: number; t
 export type DialogueTurn = { partner: string; partnerTranslation: string; you: string; youTranslation: string };
 export type DialogueSession = { topicId: string; title: string; partner: { role: string; emoji: string }; turns: DialogueTurn[] };
 export type DebateSide = "for" | "against";
-export type DebateTopicInfo = { id: string; title: string; statement: string; emoji: string; cover: string | null };
-export type DebateTopics = { total: number; topics: DebateTopicInfo[] };
+export type DebateTopicInfo = {
+  id: string; title: string; statement: string; emoji: string; cover: string | null;
+  debated: boolean; saved: { for: number; against: number }; // saved = learner messages in the unfinished debate on each side
+};
+export type DebateTopics = { total: number; debated: number; topics: DebateTopicInfo[] };
 export type DebateStart = {
   topicId: string; title: string; statement: string; side: DebateSide; teacher: { name: string; emoji: string }; opening: string;
 };
 /** One learner message checked by the AI: corrected is empty when the message was fine */
 export type DebateFeedback = { correct: boolean; corrected: string; explanation: string; translation: string };
+/** A saved debate: the conversation plus the reviews and translations keyed by message index */
+export type DebateSaved = {
+  intro: DebateStart; messages: Msg[]; reviews: Record<string, DebateFeedback>; translations: Record<string, string>;
+};
 export type FlashStatus = "new" | "learning" | "known";
 export type FlashCard = {
   topicId: string; index: number; term: string; translation: string; example: string; exampleTranslation: string;
@@ -175,6 +182,13 @@ export const api = {
     /** The teacher's answer; messages start with the opening and end with the learner's new message */
     reply: (b: Learner & { topicId: string; side: DebateSide; messages: Msg[] }) => post<{ reply: string }>("/debate/reply", b),
     feedback: (b: Learner & { message: string }) => post<DebateFeedback>("/debate/feedback", b),
+    /** The saved debate for a topic and side, or null */
+    session: (topicId: string, side: DebateSide) =>
+      request<{ session: DebateSaved | null }>("GET", `/debate/session?topicId=${encodeURIComponent(topicId)}&side=${side}`),
+    save: (b: { topicId: string; side: DebateSide; messages: Msg[]; reviews: Record<string, DebateFeedback>; translations: Record<string, string> }) =>
+      request<{ ok: boolean }>("PUT", "/debate/session", b),
+    clear: (topicId: string, side: DebateSide) =>
+      request<{ ok: boolean }>("DELETE", `/debate/session?topicId=${encodeURIComponent(topicId)}&side=${side}`),
     translate: (b: Learner & { text: string }) => post<{ translation: string }>("/debate/translate", b),
   },
   chat: (b: Learner & { mode: ChatMode; messages: Msg[]; context?: Record<string, string> }) =>

@@ -8,7 +8,7 @@ import { ErrorText, Modal } from "@/components/Modal";
 import { Logo } from "@/components/sentence/SentenceShell";
 import { useDebate } from "@/components/debate/DebateProvider";
 import { api, type DebateFeedback, type DebateSide, type DebateStart, type Msg } from "@/lib/api";
-import { debateKey, useDebateId } from "@/lib/debate";
+import { useDebateId } from "@/lib/debate";
 import { loadPrefs, savePrefs, type SentencePrefs } from "@/lib/sentence";
 import { SPEECH_LANG } from "@/lib/modes";
 import { cancelSpeech, createRecognition, hasVoiceFor, speak } from "@/lib/speech";
@@ -49,7 +49,6 @@ export default function DebatePracticePage() {
   const panelEnd = useRef<HTMLDivElement>(null);
 
   const updatePrefs = (patch: Partial<SentencePrefs>) => setPrefs((p) => { const n = { ...p, ...patch }; savePrefs(n); return n; });
-  const key = side ? debateKey(topicId, side, progress.language, progress.level, progress.nativeLanguage) : "";
 
   // the side comes from ?side=for|against (set by the intro page)
   useEffect(() => {
@@ -67,11 +66,22 @@ export default function DebatePracticePage() {
   const autoplayRef = useRef(prefs.autoplay);
   autoplayRef.current = prefs.autoplay;
 
-  // ---- load: restore an unfinished debate, otherwise ask the teacher to open it ----
-  const load = useCallback(async () => {
+  // ---- load: continue the saved debate, otherwise ask the teacher to open a new one (fresh = throw the saved one away) ----
+  const load = useCallback(async (fresh = false) => {
     if (!side) return;
     setLoadError(null); setIntro(null); setMsgs([]); setReviews({}); setTr({}); setError(null); setText("");
     try {
+      if (fresh) {
+        await api.debate.clear(topicId, side).catch(() => {}); // if this fails, the first save overwrites the old debate anyway
+      } else {
+        const { session } = await api.debate.session(topicId, side).catch(() => ({ session: null }));
+        if (session) {
+          setIntro(session.intro); setMsgs(session.messages);
+          setReviews(Object.fromEntries(Object.entries(session.reviews).map(([k, data]) => [Number(k), { state: "done" as const, data }])));
+          setTr(Object.fromEntries(Object.entries(session.translations).map(([k, text]) => [Number(k), { text, open: false }])));
+          return;
+        }
+      }
       const s = await api.debate.start(topicId, side, learner);
       setIntro(s); setMsgs([{ role: "assistant", content: s.opening }]);
       if (autoplayRef.current) setTimeout(() => speakRef.current("m0", s.opening), 450);
@@ -85,32 +95,25 @@ export default function DebatePracticePage() {
     if (!side || started.current) return;
     started.current = true;
     setPrefs(loadPrefs());
-    try {
-      const raw = sessionStorage.getItem(key);
-      if (raw) {
-        const s = JSON.parse(raw);
-        if (s.intro && Array.isArray(s.msgs) && s.msgs.length) {
-          setIntro(s.intro); setMsgs(s.msgs); setReviews(s.reviews ?? {}); setTr(s.tr ?? {});
-          return;
-        }
-      }
-    } catch {}
-    load();
-  }, [side, key, load]);
+    // ?restart=1 (the intro page's "Start over") is removed at once, so a refresh continues instead of restarting
+    const restart = new URLSearchParams(window.location.search).get("restart") === "1";
+    if (restart) window.history.replaceState(null, "", `${window.location.pathname}?side=${side}`);
+    load(restart);
+  }, [side, load]);
 
-  // keep the debate across refreshes; unfinished lookups are not saved (they would stay "loading" forever)
+  // save the debate on the server after every change (not while Kai is answering, so a half turn is never stored);
+  // lookups that are still running are left out, they would stay "loading" forever
   useEffect(() => {
-    if (!intro || !key) return;
-    const done = <T extends { state?: string; loading?: boolean }>(o: Record<number, T>, ok: (v: T) => boolean) =>
-      Object.fromEntries(Object.entries(o).filter(([, v]) => ok(v)));
-    try {
-      sessionStorage.setItem(key, JSON.stringify({
-        intro, msgs,
-        reviews: done(reviews, (r) => r.state === "done"),
-        tr: done(tr, (t) => !t.loading),
-      }));
-    } catch {}
-  }, [intro, msgs, reviews, tr, key]);
+    if (!intro || !side || busy || !msgs.some((m) => m.role === "user")) return;
+    const t = setTimeout(() => {
+      const rv: Record<string, DebateFeedback> = {};
+      for (const [k, r] of Object.entries(reviews)) if (r.state === "done") rv[k] = r.data;
+      const tv: Record<string, string> = {};
+      for (const [k, v] of Object.entries(tr)) if (v.text) tv[k] = v.text;
+      api.debate.save({ topicId, side, messages: msgs, reviews: rv, translations: tv }).catch(() => {}); // best effort, like Word Mode
+    }, 800);
+    return () => clearTimeout(t);
+  }, [intro, side, busy, msgs, reviews, tr, topicId]);
 
   useEffect(() => { end.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs, busy]);
   useEffect(() => { panelEnd.current?.scrollIntoView({ behavior: "smooth" }); }, [reviews]);
@@ -205,8 +208,7 @@ export default function DebatePracticePage() {
     setMenuOpen(false);
     if (msgs.length > 1 && !window.confirm("Start this debate over? The conversation so far will be cleared.")) return;
     cancelSpeech(); setSpeaking(null);
-    try { sessionStorage.removeItem(key); } catch {}
-    load();
+    load(true);
   };
   const close = () => { cancelSpeech(); router.push(`/debate/${topicId}`); };
 

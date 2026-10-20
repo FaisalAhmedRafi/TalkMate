@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { SentenceShell } from "@/components/sentence/SentenceShell";
 import { useDebate } from "@/components/debate/DebateProvider";
 import type { DebateSide } from "@/lib/api";
-import { DEBATE_INTRO, debateKey, useDebateId } from "@/lib/debate";
+import { DEBATE_INTRO, useDebateId } from "@/lib/debate";
 
 // Step 2: the picture of the chosen topic, the statement and the two sides.
 export default function DebateTopicPage() {
@@ -17,11 +17,9 @@ export default function DebateTopicPage() {
     if (topics && !topic) router.replace("/debate"); // unknown topic id
   }, [topics, topic, router]);
 
-  const choose = (side: DebateSide) => {
-    // choosing a side always begins a new debate, not wherever an earlier visit stopped
-    try { sessionStorage.removeItem(debateKey(topicId, side, progress.language, progress.level, progress.nativeLanguage)); } catch {}
-    router.push(`/debate/${topicId}/practice?side=${side}`);
-  };
+  // a side with a saved debate is continued; "Start over" tells the chat to throw the saved one away
+  const choose = (side: DebateSide, restart = false) => router.push(`/debate/${topicId}/practice?side=${side}${restart ? "&restart=1" : ""}`);
+  const saved = (side: DebateSide) => topic?.saved[side] ?? 0;
 
   return (
     <SentenceShell title="Debates" backHref="/debate">
@@ -47,8 +45,19 @@ export default function DebateTopicPage() {
             <p className="mt-3 text-[13px] text-white/80">{topic.statement}</p>
             <p className="mt-3 text-xs text-white/50">{progress.language} · {progress.level} · Feedback in {progress.nativeLanguage}</p>
             <div className="mt-6 flex flex-col gap-3 sm:mt-auto">
-              <button onClick={() => choose("for")} className="rounded-xl bg-indigo-700 py-3.5 text-sm font-semibold hover:bg-indigo-600">Argue for</button>
-              <button onClick={() => choose("against")} className="rounded-xl bg-indigo-700 py-3.5 text-sm font-semibold hover:bg-indigo-600">Argue against</button>
+              {(["for", "against"] as const).map((side) => (
+                <div key={side}>
+                  <button onClick={() => choose(side)} className="w-full rounded-xl bg-indigo-700 py-3.5 text-sm font-semibold hover:bg-indigo-600">
+                    {saved(side) > 0 ? `Continue arguing ${side}` : `Argue ${side}`}
+                  </button>
+                  {saved(side) > 0 && (
+                    <p className="mt-1.5 text-center text-[11px] text-white/50">
+                      {saved(side)} {saved(side) === 1 ? "message" : "messages"} saved ·{" "}
+                      <button onClick={() => choose(side, true)} className="font-semibold underline hover:text-white">Start over</button>
+                    </p>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
         </div>

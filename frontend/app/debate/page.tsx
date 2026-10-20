@@ -1,6 +1,7 @@
 "use client";
 import { useEffect } from "react";
 import Link from "next/link";
+import { Check } from "lucide-react";
 import { SentenceShell } from "@/components/sentence/SentenceShell";
 import { useDebate } from "@/components/debate/DebateProvider";
 import { ErrorText } from "@/components/Modal";
@@ -23,7 +24,7 @@ export default function DebateTopicsPage() {
 
       <div className="mt-6 grid grid-cols-2 gap-3">
         {topics?.topics.map((t) => (
-          <Link key={t.id} href={`/debate/${t.id}`}
+          <Link key={t.id} href={`/debate/${t.id}`} aria-label={t.debated ? `${t.title}, debated` : t.title}
             className="group relative block h-[150px] overflow-hidden rounded-2xl border border-white/10 bg-[#1c1c24] sm:h-[190px]">
             {t.cover ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -33,6 +34,9 @@ export default function DebateTopicsPage() {
             )}
             {/* darkened top edge keeps the white title readable on any picture */}
             <div className="pointer-events-none absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-black/70 to-transparent" />
+            {t.debated && (
+              <span className="absolute bottom-3 right-3 flex h-7 w-7 items-center justify-center rounded-full border border-indigo-400 bg-white text-indigo-600"><Check size={16} strokeWidth={3} /></span>
+            )}
             <span lang="en" style={{ hyphens: "auto" }} className="absolute left-3 right-3 top-3 text-[15px] font-semibold leading-tight drop-shadow sm:text-base">{t.title}</span>
           </Link>
         ))}
