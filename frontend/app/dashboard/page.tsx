@@ -78,7 +78,7 @@ export default function Dashboard() {
   const learner = { targetLanguage: s.language, nativeLanguage: s.nativeLanguage, level: s.level };
   const clickMode = (m: Mode) => {
     if (m.premium && !s.premium) return setUpsell(m.title);
-    if (m.id === "sentence" || m.id === "word" || m.id === "dialogue" || m.id === "flashcards") return router.push(`/${m.id}`); // these modes are sets of pages, not modals
+    if (m.id === "sentence" || m.id === "word" || m.id === "dialogue" || m.id === "debate" || m.id === "flashcards") return router.push(`/${m.id}`); // these modes are sets of pages, not modals
     setOpenMode(m);
   };
   const onNav = (id: string) => (id === "premium" ? setUpsell("Premium") : setActive(id));
@@ -227,7 +227,7 @@ export default function Dashboard() {
       </main>
 
       {openMode && <PracticeTimer onSnapshot={setS} />}
-      {openMode && ["chat", "call", "roleplay", "characters", "debate"].includes(openMode.id) && (
+      {openMode && ["chat", "call", "roleplay", "characters"].includes(openMode.id) && (
         <ChatPanel mode={openMode.id as any} title={openMode.title} learner={learner} onPractice={practice} onClose={() => setOpenMode(null)} />
       )}
       {openMode && ["sentence", "word", "dialogue", "flashcards"].includes(openMode.id) && (

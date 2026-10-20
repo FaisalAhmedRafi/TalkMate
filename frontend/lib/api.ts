@@ -37,6 +37,14 @@ export type DialogueTopicInfo = { id: string; title: string; emoji: string; part
 export type DialogueTopics = { percent: number; passed: number; total: number; topics: DialogueTopicInfo[] };
 export type DialogueTurn = { partner: string; partnerTranslation: string; you: string; youTranslation: string };
 export type DialogueSession = { topicId: string; title: string; partner: { role: string; emoji: string }; turns: DialogueTurn[] };
+export type DebateSide = "for" | "against";
+export type DebateTopicInfo = { id: string; title: string; statement: string; emoji: string; cover: string | null };
+export type DebateTopics = { total: number; topics: DebateTopicInfo[] };
+export type DebateStart = {
+  topicId: string; title: string; statement: string; side: DebateSide; teacher: { name: string; emoji: string }; opening: string;
+};
+/** One learner message checked by the AI: corrected is empty when the message was fine */
+export type DebateFeedback = { correct: boolean; corrected: string; explanation: string; translation: string };
 export type FlashStatus = "new" | "learning" | "known";
 export type FlashCard = {
   topicId: string; index: number; term: string; translation: string; example: string; exampleTranslation: string;
@@ -156,6 +164,18 @@ export const api = {
     },
     complete: (b: { topicId: string; scores: number[] }) =>
       post<{ average: number; passed: boolean; percent: number; progress: Progress }>("/dialogue/complete", b),
+  },
+  debate: {
+    topics: () => request<DebateTopics>("GET", "/debate/topics"),
+    /** Opens a debate: the teacher's first message for the topic and the learner's side */
+    start: (topicId: string, side: DebateSide, b: Learner) => {
+      if (!topicId) throw new Error("Couldn't tell which debate to open. Go back and pick one.");
+      return post<DebateStart>("/debate/start", { ...b, topicId, side });
+    },
+    /** The teacher's answer; messages start with the opening and end with the learner's new message */
+    reply: (b: Learner & { topicId: string; side: DebateSide; messages: Msg[] }) => post<{ reply: string }>("/debate/reply", b),
+    feedback: (b: Learner & { message: string }) => post<DebateFeedback>("/debate/feedback", b),
+    translate: (b: Learner & { text: string }) => post<{ translation: string }>("/debate/translate", b),
   },
   chat: (b: Learner & { mode: ChatMode; messages: Msg[]; context?: Record<string, string> }) =>
     post<{ reply: string }>("/ai/chat", b),
