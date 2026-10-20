@@ -5,6 +5,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AccountModule } from './account/account.module';
 import { AiModule } from './ai/ai.module';
 import { AuthModule } from './auth/auth.module';
+import { DialogueModule } from './dialogue/dialogue.module';
 import { FlashcardModule } from './flashcard/flashcard.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProgressModule } from './progress/progress.module';
@@ -32,6 +33,7 @@ class HealthController {
     SentenceModule,
     WordModule,
     FlashcardModule,
+    DialogueModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

@@ -33,6 +33,10 @@ export type WordLesson = {
 export type FlashImage = { url: string; credit: string; creditUrl: string };
 export type FlashTopicInfo = { id: string; title: string; emoji: string; total: number; known: number; completed: boolean; cover: string | null };
 export type FlashTopics = { language: string; reviewCount: number; topics: FlashTopicInfo[] };
+export type DialogueTopicInfo = { id: string; title: string; emoji: string; partner: string; partnerEmoji: string; cover: string | null; passed: boolean; bestScore: number; attempts: number };
+export type DialogueTopics = { percent: number; passed: number; total: number; topics: DialogueTopicInfo[] };
+export type DialogueTurn = { partner: string; partnerTranslation: string; you: string; youTranslation: string };
+export type DialogueSession = { topicId: string; title: string; partner: { role: string; emoji: string }; turns: DialogueTurn[] };
 export type FlashStatus = "new" | "learning" | "known";
 export type FlashCard = {
   topicId: string; index: number; term: string; translation: string; example: string; exampleTranslation: string;
@@ -142,6 +146,16 @@ export const api = {
     mark: (b: { topicId: string; language: string; index: number; status?: "learning" | "known"; flagged?: boolean }) =>
       request<{ ok: boolean }>("PATCH", "/flashcards/mark", b),
     complete: (b: { topicId: string; known: number; total: number }) => post<{ progress: Progress }>("/flashcards/complete", b),
+  },
+  dialogue: {
+    topics: () => request<DialogueTopics>("GET", "/dialogue/topics"),
+    /** The scripted conversation for a topic; fresh asks for a new script instead of the saved one */
+    session: (topicId: string, b: Learner & { fresh?: boolean }) => {
+      if (!topicId) throw new Error("Couldn't tell which dialogue to practise. Go back and pick one.");
+      return post<DialogueSession>("/dialogue/session", { ...b, topicId });
+    },
+    complete: (b: { topicId: string; scores: number[] }) =>
+      post<{ average: number; passed: boolean; percent: number; progress: Progress }>("/dialogue/complete", b),
   },
   chat: (b: Learner & { mode: ChatMode; messages: Msg[]; context?: Record<string, string> }) =>
     post<{ reply: string }>("/ai/chat", b),

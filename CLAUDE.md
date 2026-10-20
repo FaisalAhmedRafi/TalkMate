@@ -6,7 +6,7 @@ Guidance for working in this repository. Every source file in the project was re
 
 TalkMate is an AI language-practice web app (a Talkpal-style clone; the UI even says "in this clone"). A learner picks a target language and level, then practices in ten "modes": Chat, Call (voice), Sentence, Word, Dialogue, Roleplays, Characters, Debates, Photo and Flashcards. Practice earns XP, levels, streaks and achievements, and an LLM writes daily feedback.
 
-**Sentence, Word and Flashcards are not modals like the other modes.** All three are page-based. Sentence (`/sentence`, 10 units x 3 skills): the AI writes 5 sentences for a skill, the learner hears them, reads them aloud, and gets a 1-5 pronunciation rating. Word (`/word`, 10 units x 12 stars): each star is one word with a photo, then 3 sentences made from the word, rated the same way, and an unfinished lesson can be resumed. Flashcards (`/flashcards`, 18 topics x 15 cards): a topic grid, then a full-screen deck where the learner sees a photo, the word, its sound and an example sentence and marks each card "Learning" or "I know it"; marked cards feed a Daily review. See "Sentence Mode", "Word Mode" and "Flashcards Mode" below.
+**Sentence, Word, Dialogue and Flashcards are not modals like the other modes.** All are page-based. Dialogue (`/dialogue`, 21 topics): a picture grid of topics, a topic intro page with Start, then a practice screen where a partner speaks a line and the learner reads their answer aloud for a 1-5 rating (backend `src/dialogue`: catalog, prompts, in-memory script cache, `GET /dialogue/topics`, `POST /dialogue/session`, `POST /dialogue/complete`; progress in `DialogueProgress` (best score, attempts, passed; check badge on the grid); pronunciation reuses `/sentence/evaluate`; the old `GeneratePanel` dialogue type is now legacy). Sentence (`/sentence`, 10 units x 3 skills): the AI writes 5 sentences for a skill, the learner hears them, reads them aloud, and gets a 1-5 pronunciation rating. Word (`/word`, 10 units x 12 stars): each star is one word with a photo, then 3 sentences made from the word, rated the same way, and an unfinished lesson can be resumed. Flashcards (`/flashcards`, 18 topics x 15 cards): a topic grid, then a full-screen deck where the learner sees a photo, the word, its sound and an example sentence and marks each card "Learning" or "I know it"; marked cards feed a Daily review. See "Sentence Mode", "Word Mode" and "Flashcards Mode" below.
 
 **Account is a dashboard tab**, not a modal: target language, Personalization answers, demo Subscriptions and Refer-a-friend. See "Account" below. There is no real billing.
 
@@ -73,6 +73,7 @@ backend/
     20261017110133_/              Account: User referral columns, Personalization, Subscription (also unnamed)
     20261019103226_word_mode/     WordProgress
     20261019120754_flashcards/    FlashcardDeck
+    20261020120000_dialogue_mode/ DialogueProgress
   src/main.ts                     bootstrap, body limit, CORS, ValidationPipe
   src/app.module.ts               ConfigModule (global), Throttler, HealthController (GET /health)
   src/prisma/prisma.module.ts     global PrismaService (extends PrismaClient, connects on init)
@@ -221,6 +222,7 @@ All routes are behind `AuthGuard`. **Billing is not connected**: plans have no p
 - `PracticeEntry(id cuid, userId, day "YYYY-MM-DD" (UTC), text, createdAt)`, index on `(userId, day)`.
 - `PracticeDay(userId, day "YYYY-MM-DD" (browser local), seconds)`, composite PK `(userId, day)`.
 - `SentenceProgress(userId, skillId, bestScore Float, lastScore Float, attempts, passed, updatedAt)`, composite PK `(userId, skillId)`; `skillId` must match an id in `sentence.catalog.ts`.
+- `DialogueProgress(userId, topicId, bestScore Float, lastScore Float, attempts, passed, updatedAt)`, composite PK `(userId, topicId)`; `topicId` must match an id in `dialogue.catalog.ts`. Not per language, like Sentence Mode.
 - `Personalization(userId PK -> User, reason?, frequency?, goal?, style?, ageRange?)`: nullable strings holding the chosen option text.
 - `Subscription(userId PK -> User, months default 1, status default "active", currentPeriodEnd DateTime, createdAt, updatedAt)`.
 - `WordProgress(userId, wordId, language, lesson Json?, step, scores Json default [], finished, passed, bestScore, attempts, updatedAt)`, composite PK `(userId, wordId, language)`. `lesson` stores the generated lesson so a resume shows identical content; `finished` is the current run, `passed`/`bestScore` are lifetime.
