@@ -10,6 +10,8 @@ TalkMate is an AI language-practice web app (a Talkpal-style clone; the UI even 
 
 **Characters is page-based too** (`/characters`, 30 characters): a portrait grid, a character intro page with Start, then a full-screen chat where the character speaks the learner's language and a right-hand panel reviews each learner message (backend `src/characters`; conversations are saved per user, character and language). See "Characters Mode" below.
 
+**Call is page-based too** (`/call`, one full-screen page): a phone call with the teacher Kai, a right-hand panel that reviews what the learner said, and an "Advanced feedback" button (backend `src/call`; see "Call Mode" below). The old modal call in `ChatPanel` is now legacy.
+
 **Photo is page-based too** (`/photo`, 2 units x 8 stars): a star grid, then a full-screen page with a picture and a text/mic box where the AI judges the learner's description (see "Photo Mode" below). The old `PhotoPanel` upload modal is now legacy.
 
 **Account is a dashboard tab**, not a modal: target language, Personalization answers, demo Subscriptions and Refer-a-friend. See "Account" below. There is no real billing.
@@ -94,6 +96,7 @@ backend/
   src/characters/                 catalog, prompts, dto, service, controller, module (Characters Mode)
   src/roleplay/                   catalog, prompts, dto, service, controller, module (Roleplay Mode; reuses WordImageService)
   src/photo/                      catalog, prompts, dto, service, controller, module (Photo Mode)
+  src/call/                       prompts, dto, service, controller, module (Call Mode; no database tables)
 frontend/
   app/layout.tsx, globals.css     root layout (title "TalkMate"), Tailwind directives
   app/page.tsx                    redirects to /dashboard
@@ -122,6 +125,9 @@ frontend/
   components/photo/               PhotoProvider (auth, Premium gate, PracticeTimer, star grid data)
   app/photo/                      layout.tsx, page.tsx (unit/star grid), [photoId]/page.tsx (picture + description + AI feedback)
   lib/photo.ts                    usePhotoId(), nextPhotoId(), imageToDataUrl()
+  components/call/                CallProvider (auth, Premium gate, PracticeTimer)
+  app/call/                       layout.tsx, page.tsx (the whole call screen: Kai, timer, controls, review panel, Advanced feedback)
+  public/call/kai.svg             Kai's avatar (a drawn placeholder; overwrite it or point `KAI_IMG` in `app/call/page.tsx` at your own portrait)
   public/photo/                   the 16 pictures 1.jpg ... 16.jpg (added by hand, see Photo Mode)
 ```
 
@@ -171,7 +177,7 @@ All routes are behind `AuthGuard`.
 - `learner()` fallback defaults in `ai.service.ts`: target `Bengali`, native `English`, level `Beginner`. The dashboard now sends the learner's saved `nativeLanguage` (the "My language" select) with every call, so corrections, translations and feedback are written in it. `LearnerDto` in `ai/dto.ts` is exported and reused by the Sentence DTOs.
 - `prompts.ts` is the single place for tutor behavior:
   - chat: friendly teacher, 2-4 short sentences in the target language, ends with a question, adds a `Correction:` line when needed.
-  - call: 1-2 short sentences, **no emojis, markdown or lists** because the reply is read aloud by the browser.
+  - call: **legacy** `/ai/chat` mode (1-2 short sentences, no emojis, markdown or lists because the reply is read aloud). Home now opens the page-based Call Mode, which has its own prompts in `src/call/call.prompts.ts`.
   - roleplay: plays the other party in a scenario (default restaurant), adds `(Tip: ...)`. **Legacy**: Home now opens the page-based Roleplay Mode, which has its own prompts in `src/roleplay`.
   - characters: no longer a `/ai/chat` mode. Its prompts live in `src/characters/characters.prompts.ts` (see Characters Mode).
   - debate: user argues `for`/`against` (default `for`), AI takes the opposite side, respectful, one argument per turn.
@@ -247,6 +253,18 @@ All routes are behind `AuthGuard`, throttled at 40 / 60 s (every turn is a reply
 - **Saved chats** (`RoleplaySession`, one per user, scenario and language): `GET/PUT/DELETE /roleplay/session`. The client PUTs the whole conversation (messages + finished reviews + translations) after every change; the service rebuilds and trims `reviews` / `translations` by message index. Saving gives no XP; only `/roleplay/reply` does.
 - Cost: opening a scenario is 1 AI request, each learner message is 2 (reply + review), a translation is 1, resuming a saved chat is 0.
 
+### Call Mode (`src/call`)
+
+All routes are behind `AuthGuard` with a 40 / 60 s throttle (every spoken turn is a reply plus a review). Nothing is stored: **there are no Call tables and no migration**; a call lives in the browser until the page is closed. Nothing here checks `premium` server-side. `CallModule` imports `AiModule` and `ProgressModule`.
+
+- The teacher is always **Kai** (`TEACHER` in `call.prompts.ts`). He calls the learner by the account name (else the first part of the email), speaks only the target language, answers in 1-4 sentences by level (`LENGTH`), reacts, then asks one simple follow-up. He never corrects mistakes (the panel does), and uses no emojis, markdown or lists because the reply is read aloud.
+- `POST /call/start` `{ ...learner }` -> `{ teacher: { name }, opening }`: Kai's greeting and one easy question. 1 AI request.
+- `POST /call/reply` `{ messages[1..30] (last must be the learner's), ...learner }` -> `{ reply }`. Calls `ProgressService.practice("Call: <message>")`, so each turn gives +10 XP and a daily-feedback line.
+- `POST /call/feedback` `{ message (1-1000), ...learner }` -> `{ correct, corrected, explanation }`. Ignores capitals and punctuation because the text comes from speech recognition; a message not in the target language is `correct: false`. `corrected` is empty when correct; `explanation` is written in the native language. Retries once on unreadable JSON, then 502.
+- `POST /call/translate` `{ text, ...learner }` -> `{ translation }` (Kai's line in the native language).
+- `POST /call/advanced` `{ messages[1..30], ...learner }` -> `{ summary, strengths[1-3], mistakes[0-5] of { original, corrected, explanation }, tips[1-3] }`. 400 if the call has no learner message. Written in the native language. 1 AI request (retries once on bad JSON).
+- Cost: greeting 1 request, each turn 2 (reply + review), translate 1, advanced feedback 1. This matters for the free OpenRouter quota.
+
 ### Photo Mode (`src/photo`)
 
 All routes are behind `AuthGuard` (default throttle 20 / 60 s; each judging is one OpenRouter vision request). Nothing here checks `premium` server-side. `PhotoModule` imports `AiModule` and `ProgressModule`.
@@ -294,7 +312,7 @@ All routes are behind `AuthGuard`. **Billing is not connected**: plans have no p
 - The sidebar logo is a button: it returns to the Home tab, closes any open mode and pushes `/dashboard`. On Sentence Mode pages the shared `Logo` is a link to `/dashboard`. The dashboard also honours `?tab=progress` on load (the Sentence sidebar's Progress link uses it).
 - Home has three selects: **My language** (`nativeLanguage`, what translations and feedback are written in), the language being learned, and level. All PATCH `/progress/settings`.
 - Home lists `MODES` from `lib/modes.ts`. Only Chat is free; the other 9 show a lock and open the upsell modal unless `s.premium`. The upsell button calls the demo `POST /progress/premium`. Language and level selects update state optimistically and PATCH `/progress/settings`.
-- Mode routing in the dashboard uses hard-coded id arrays: chat/call -> `ChatPanel` (`roleplay`, `debate` and the old `characters` are no longer reachable through it; `roleplay` and `debate` are still in the `ChatMode` type); dialogue -> `GeneratePanel`; photo -> `PhotoPanel`. **Sentence, Word, Dialogue, Roleplays, Characters, Debates, Flashcards and Photo are the exceptions**: `clickMode` does `router.push("/<id>")` (e.g. `"/characters"`, `"/roleplay"`) (after the Premium check) instead of opening a modal. The `"sentence"`, `"word"` and `"flashcards"` entries left in the `GeneratePanel` array and generate types are legacy and unreachable from Home (the old flip-card carousel in `GeneratePanel` is dead code). `FeedbackModal` (defined at the bottom of the dashboard file) calls `/ai/feedback` with `s.today`.
+- Mode routing in the dashboard uses hard-coded id arrays: chat -> `ChatPanel` (`call`, `roleplay`, `debate` and the old `characters` are no longer reachable through it; they are still in the `ChatMode` type); dialogue -> `GeneratePanel`; photo -> `PhotoPanel`. **Call, Sentence, Word, Dialogue, Roleplays, Characters, Debates, Flashcards and Photo are the exceptions**: `clickMode` does `router.push("/<id>")` (e.g. `"/characters"`, `"/roleplay"`) (after the Premium check) instead of opening a modal. The `"sentence"`, `"word"` and `"flashcards"` entries left in the `GeneratePanel` array and generate types are legacy and unreachable from Home (the old flip-card carousel in `GeneratePanel` is dead code). `FeedbackModal` (defined at the bottom of the dashboard file) calls `/ai/feedback` with `s.today`.
 - `PracticeTimer` is mounted **only while a mode modal is open, or inside `/sentence/*`, `/word/*` and `/flashcards/*`** (`SentenceProvider`, `WordProvider` and `FlashcardsProvider` mount it), so practice time is counted only inside a mode.
 
 ### `lib/api.ts`
@@ -373,6 +391,17 @@ Flow: Home -> `/characters` -> `/characters/<characterId>` -> `/characters/<char
 - **Portraits**: tiles are a colour gradient (from `hue`) with the character's emoji by default. To use artwork, put `public/characters/<id>.jpg` files in place (ids as in `characters.catalog.ts`, roughly 4:5 portrait) and set `NEXT_PUBLIC_CHARACTER_PORTRAITS=1`; a missing file falls back to the gradient tile. No artwork is included.
 - `ReviewPanels.tsx` holds `ReviewBadge`, `FeedbackEmpty` and `FeedbackList`. The Debate practice page still has its own copies of these.
 
+### Call page (`app/call`)
+
+One full-screen page, `/call`, behind `CallProvider` (login, Premium redirect, `PracticeTimer`). Header: logo, centred "Call Mode", close (back to `/dashboard`). Two cards, the right one hidden below `lg` (it opens as a "Message feedback" modal from the ⋮ menu).
+
+- **Call card**: Kai's avatar and a green dot on top, ⋮ menu (Slow speech, Message feedback on small screens, Start a new call, End call), an orange **i** button (About Call Mode), then the big avatar, "Kai" and the call timer (`mm:ss`, `h:mm:ss` after an hour; counts from the moment Kai picks up, resets on a new call). A small status line shows Connecting / Listening / Kai is thinking. The avatar gets a ring while Kai is speaking.
+- **Control bar** (left to right): **Kai's voice** on/off (`Speech`, highlighted while on; off also shows Kai's text as a caption), **Translate** (shows Kai's last line plus its translation, fetched once per line), **Replay** (Kai's last line again), and the round **mic** (blue; red and pulsing while recording; tap again to stop). Slow speech uses the shared `SentencePrefs.slow`; the voice toggle is page-local and not saved.
+- **Flow**: on load `api.call.start` gives Kai's greeting, spoken aloud (the browser may need a click first, which the Home click already provides). The mic uses `createRecognition`; when recognition ends with text it is sent at once (`api.call.reply`) and, in parallel, reviewed (`api.call.feedback`). If the reply fails the learner's message and its review are taken back and the error is shown. Only the last 20 messages are sent. Nothing is saved, so a refresh starts a new call.
+- **Right panel**: per message a dashed box with what was heard, then (when wrong) a grey `x` line with the original and a green `check` line with the corrected sentence (click it to hear it), then a short explanation in the native language; a correct message shows one green line. While the mic is open the live transcript appears at the bottom. Empty state until the first message.
+- **Advanced feedback** (button at the bottom of the panel, disabled until the learner has spoken): `api.call.advanced` on the last 30 messages, shown in a modal as summary, what went well, mistakes to fix and what to practise.
+- Kai's picture is `public/call/kai.svg` (`KAI_IMG` in `page.tsx`).
+
 ### Photo pages (`app/photo`)
 
 - `/photo` (uses `SentenceShell`, back link to `/dashboard`): "Photo Mode" header and description, a progress pill with `percent`, then one bordered card per unit with a "Unit N" pill and a `done/total` pill. Each unit is **8 stars, 4 per row** (2 rows), centred, with each tile the same size as a Word Mode tile (a column is one sixth of the row, aspect 1:0.95, star size 22); a star is a link to `/photo/<id>` and turns yellow once passed. Data comes from `PhotoProvider` (`usePhoto()`), which also holds the Premium gate.
@@ -444,7 +473,7 @@ Tailwind utility classes only (`globals.css` is just the three directives). Dark
 11. **Loose typing**: controllers use `@Req() req: any`, AI JSON is `any`, backend `noImplicitAny` is off. Match existing style unless deliberately tightening.
 12. **Free-model flakiness**: surface errors to users (the panels already show `ErrorText`); do not swallow them. Large `count` values for generate may produce truncated JSON at 1400 max tokens, which is handled by the retry then a 502.
 13. **No mobile navigation** in the dashboard (see Shell and routing).
-14. Call-mode speech works best in Chrome; other browsers show a typed-input fallback message.
+14. Call Mode needs speech recognition (Chrome or Edge) and has **no typed fallback**: other browsers show "Speech recognition isn't supported in this browser". Replies are read with the browser's installed voices (a warning shows when none exists for the language). Call Mode does not check Premium on the server and nothing about a call is saved.
 15. **Sentence Mode trusts the browser.** `POST /sentence/complete` accepts whatever scores the client sends, so a user can fake a pass. Premium is not checked on `/sentence/*` either (extends gotcha 1).
 16. **Pronunciation is judged on browser speech-to-text, not on audio.** Recognition quality varies by browser and language (Bengali is weaker in Chrome's recogniser), so a correctly spoken word can be marked wrong. Replay uses the browser's installed voices: Chrome has no Bengali voice (the page shows a warning); Edge ships natural online voices. An audio-capable model or server-side text-to-speech would fix this but was deliberately not added.
 17. **Free-quota burn.** A Sentence session costs roughly 6-12 OpenRouter requests, so the 50/day free cap can run out after a few sessions (see Environment variables). Starting a skill always generates new sentences; nothing is cached server-side.

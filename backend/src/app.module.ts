@@ -5,6 +5,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AccountModule } from './account/account.module';
 import { AiModule } from './ai/ai.module';
 import { AuthModule } from './auth/auth.module';
+import { CallModule } from './call/call.module';
 import { CharactersModule } from './characters/characters.module';
 import { DebateModule } from './debate/debate.module';
 import { DialogueModule } from './dialogue/dialogue.module';
@@ -39,6 +40,7 @@ class HealthController {
     FlashcardModule,
     DialogueModule,
     DebateModule,
+    CallModule,
     CharactersModule,
     RoleplayModule,
     PhotoModule,

@@ -69,6 +69,13 @@ export type CharacterInfo = {
 };
 export type CharacterList = { total: number; talked: number; characters: CharacterInfo[] };
 export type CharacterStart = { characterId: string; name: string; emoji: string; hue: number; about: string; opening: string };
+/** One spoken learner message checked by the AI: corrected is empty when the message was fine */
+export type CallFeedback = { correct: boolean; corrected: string; explanation: string };
+/** "Advanced feedback": a review of the whole call */
+export type CallAdvanced = {
+  summary: string; strengths: string[]; tips: string[];
+  mistakes: { original: string; corrected: string; explanation: string }[];
+};
 /** One learner message checked by the AI: corrected is empty when the message was fine */
 export type CharacterFeedback = { correct: boolean; corrected: string; explanation: string; translation: string };
 /** A saved conversation: the messages plus the reviews and translations keyed by message index */
@@ -233,6 +240,15 @@ export const api = {
     clear: (topicId: string, side: DebateSide) =>
       request<{ ok: boolean }>("DELETE", `/debate/session?topicId=${encodeURIComponent(topicId)}&side=${side}`),
     translate: (b: Learner & { text: string }) => post<{ translation: string }>("/debate/translate", b),
+  },
+  call: {
+    /** Kai picks up: his first line */
+    start: (b: Learner) => post<{ teacher: { name: string }; opening: string }>("/call/start", b),
+    /** Kai's answer; messages start with his greeting and end with the learner's new message */
+    reply: (b: Learner & { messages: Msg[] }) => post<{ reply: string }>("/call/reply", b),
+    feedback: (b: Learner & { message: string }) => post<CallFeedback>("/call/feedback", b),
+    translate: (b: Learner & { text: string }) => post<{ translation: string }>("/call/translate", b),
+    advanced: (b: Learner & { messages: Msg[] }) => post<CallAdvanced>("/call/advanced", b),
   },
   characters: {
     list: () => request<CharacterList>("GET", "/characters"),
