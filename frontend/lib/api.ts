@@ -30,6 +30,16 @@ export type WordLesson = {
   step: number; scores: (number | null)[]; resumed: boolean;
   image: { url: string; credit: string; creditUrl: string } | null;
 };
+export type PhotoItem = { id: string; image: string; passed: boolean; bestScore: number };
+export type PhotoUnits = { language: string; percent: number; passed: number; total: number; units: { number: number; photos: PhotoItem[] }[] };
+export type PhotoJudgement = {
+  score: number;
+  summary: string;
+  corrections: { original: string; corrected: string; explanation: string }[];
+  better: string;
+  betterTranslation: string;
+  words: { word: string; translation: string }[];
+};
 export type FlashImage = { url: string; credit: string; creditUrl: string };
 export type FlashTopicInfo = { id: string; title: string; emoji: string; total: number; known: number; completed: boolean; cover: string | null };
 export type FlashTopics = { language: string; reviewCount: number; topics: FlashTopicInfo[] };
@@ -177,6 +187,11 @@ export const api = {
       request<{ ok: boolean }>("PATCH", "/word/lesson", b),
     complete: (b: { wordId: string; language: string; scores: (number | null)[] }) =>
       post<{ average: number; passed: boolean; percent: number; progress: Progress }>("/word/complete", b),
+  },
+  photos: {
+    units: () => request<PhotoUnits>("GET", "/photo/units"),
+    judge: (b: Learner & { photoId: string; image: string; description: string }) =>
+      post<{ result: PhotoJudgement; passed: boolean; bestScore: number; percent: number; progress: Progress }>("/photo/judge", b),
   },
   flashcards: {
     topics: () => request<FlashTopics>("GET", "/flashcards/topics"),

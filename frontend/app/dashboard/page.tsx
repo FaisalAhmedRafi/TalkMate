@@ -78,7 +78,7 @@ export default function Dashboard() {
   const learner = { targetLanguage: s.language, nativeLanguage: s.nativeLanguage, level: s.level };
   const clickMode = (m: Mode) => {
     if (m.premium && !s.premium) return setUpsell(m.title);
-    if (m.id === "sentence" || m.id === "word" || m.id === "dialogue" || m.id === "characters" || m.id === "roleplay" || m.id === "debate" || m.id === "flashcards") return router.push(`/${m.id}`); // these modes are sets of pages, not modals
+    if (m.id === "sentence" || m.id === "word" || m.id === "dialogue" || m.id === "characters" || m.id === "roleplay" || m.id === "debate" || m.id === "flashcards" || m.id === "photo") return router.push(`/${m.id}`); // these modes are sets of pages, not modals
     setOpenMode(m);
   };
   const onNav = (id: string) => (id === "premium" ? setUpsell("Premium") : setActive(id));

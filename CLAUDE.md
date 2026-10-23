@@ -10,6 +10,8 @@ TalkMate is an AI language-practice web app (a Talkpal-style clone; the UI even 
 
 **Characters is page-based too** (`/characters`, 30 characters): a portrait grid, a character intro page with Start, then a full-screen chat where the character speaks the learner's language and a right-hand panel reviews each learner message (backend `src/characters`; conversations are saved per user, character and language). See "Characters Mode" below.
 
+**Photo is page-based too** (`/photo`, 2 units x 8 stars): a star grid, then a full-screen page with a picture and a text/mic box where the AI judges the learner's description (see "Photo Mode" below). The old `PhotoPanel` upload modal is now legacy.
+
 **Account is a dashboard tab**, not a modal: target language, Personalization answers, demo Subscriptions and Refer-a-friend. See "Account" below. There is no real billing.
 
 Monorepo with two independent apps, **no root `package.json`**. Run every npm command inside `backend/` or `frontend/`.
@@ -77,6 +79,7 @@ backend/
     20261019120754_flashcards/    FlashcardDeck
     20261020120000_dialogue_mode/ DialogueProgress
     20261020130000_characters_mode/ CharacterSession
+    20261021090000_photo_mode/    PhotoProgress
     20261020120000_roleplay_mode/ RoleplaySession (hand-written to match what `prisma migrate dev` generates; run `npx prisma migrate dev` to apply it)
   src/main.ts                     bootstrap, body limit, CORS, ValidationPipe
   src/app.module.ts               ConfigModule (global), Throttler, HealthController (GET /health)
@@ -90,6 +93,7 @@ backend/
   src/flashcard/                  catalog, prompts, dto, service, controller, module (Flashcards Mode; reuses WordImageService)
   src/characters/                 catalog, prompts, dto, service, controller, module (Characters Mode)
   src/roleplay/                   catalog, prompts, dto, service, controller, module (Roleplay Mode; reuses WordImageService)
+  src/photo/                      catalog, prompts, dto, service, controller, module (Photo Mode)
 frontend/
   app/layout.tsx, globals.css     root layout (title "TalkMate"), Tailwind directives
   app/page.tsx                    redirects to /dashboard
@@ -115,6 +119,10 @@ frontend/
   components/roleplay/            RoleplayProvider (auth, Premium gate, PracticeTimer, scenario grid data), Feedback (ReviewBadge, FeedbackEmpty, FeedbackList)
   app/roleplay/                   layout.tsx, page.tsx (scenario grid), [scenarioId]/page.tsx (intro), [scenarioId]/practice/page.tsx (the chat)
   lib/roleplay.ts                 useRoleplayId(), ROLEPLAY_INTRO
+  components/photo/               PhotoProvider (auth, Premium gate, PracticeTimer, star grid data)
+  app/photo/                      layout.tsx, page.tsx (unit/star grid), [photoId]/page.tsx (picture + description + AI feedback)
+  lib/photo.ts                    usePhotoId(), nextPhotoId(), imageToDataUrl()
+  public/photo/                   the 16 pictures 1.jpg ... 16.jpg (added by hand, see Photo Mode)
 ```
 
 ## Backend in detail
@@ -239,6 +247,15 @@ All routes are behind `AuthGuard`, throttled at 40 / 60 s (every turn is a reply
 - **Saved chats** (`RoleplaySession`, one per user, scenario and language): `GET/PUT/DELETE /roleplay/session`. The client PUTs the whole conversation (messages + finished reviews + translations) after every change; the service rebuilds and trims `reviews` / `translations` by message index. Saving gives no XP; only `/roleplay/reply` does.
 - Cost: opening a scenario is 1 AI request, each learner message is 2 (reply + review), a translation is 1, resuming a saved chat is 0.
 
+### Photo Mode (`src/photo`)
+
+All routes are behind `AuthGuard` (default throttle 20 / 60 s; each judging is one OpenRouter vision request). Nothing here checks `premium` server-side. `PhotoModule` imports `AiModule` and `ProgressModule`.
+
+- **Catalog** (`photo.catalog.ts`): `PHOTO_UNITS` = 2 units x 8 photos (`TOTAL_PHOTOS` = 16). Photo ids are `photo-<n>` (the keys stored in `PhotoProgress`) and each points at `/photo/<n>.jpg`, a file the **frontend** serves from `frontend/public/photo/`. Unit 1 = 1-8, Unit 2 = 9-16. A non-jpg file needs `photo(n, 'png')`. The backend never reads the image files.
+- `GET /photo/units` -> `{ language, percent, passed, total, units: [{ number, photos: [{ id, image, passed, bestScore }] }] }`, progress for `Progress.language` only. `percent` = passed photos / `TOTAL_PHOTOS`.
+- `POST /photo/judge` `{ photoId, image (data URL, png|jpeg|webp, max 5M chars), description (2-1000 chars), targetLanguage?, nativeLanguage?, level? }`. Because the backend cannot read the frontend's files, **the browser resizes the picture (max 800 px JPEG) and sends it along**. The AI (`judgeSystem` in `photo.prompts.ts`, multimodal message, temperature 0.4, up to 2 attempts, 502 if the JSON is unusable) returns `{ score 1-5, summary, corrections (max 3), better, betterTranslation, words (max 3) }`. The learner's text is treated as data, not instructions. `passed` = score >= `PASS_SCORE` (3, imported from `sentence.service.ts`). The row is upserted (best score, last score, attempts, sticky `passed`), `ProgressService.practice()` gives +10 XP, and the response is `{ result, passed, bestScore, percent, progress }`.
+- Like `/ai/photo`, this needs a vision-capable model: if `openrouter/free` does not route to one, pin it with `OPENROUTER_MODEL`.
+
 ### Account (`src/account`)
 All routes are behind `AuthGuard`. **Billing is not connected**: plans have no prices and nothing is charged; everything is demo logic so the Account page has something to manage.
 
@@ -264,6 +281,7 @@ All routes are behind `AuthGuard`. **Billing is not connected**: plans have no p
 - `Subscription(userId PK -> User, months default 1, status default "active", currentPeriodEnd DateTime, createdAt, updatedAt)`.
 - `WordProgress(userId, wordId, language, lesson Json?, step, scores Json default [], finished, passed, bestScore, attempts, updatedAt)`, composite PK `(userId, wordId, language)`. `lesson` stores the generated lesson so a resume shows identical content; `finished` is the current run, `passed`/`bestScore` are lifetime.
 - `FlashcardDeck(userId, topicId, language, cards Json, status Json default [], flagged Json default [], updatedAt)`, composite PK `(userId, topicId, language)`. `cards` is `[{ term, translation, example, exampleTranslation, photo, image }]`; `status` is one of `new | learning | known` per card and `flagged` a boolean per card, **both matched to the card by array index**, so never reorder or trim `cards` without rewriting both arrays. `topicId` must match an id in `flashcard.catalog.ts`.
+- `PhotoProgress(userId, photoId, language, bestScore Int, lastScore Int, attempts, passed, updatedAt)`, composite PK `(userId, photoId, language)`. `photoId` must match an id in `photo.catalog.ts`; a score of 3 or more sets `passed`, which stays true.
 - All child relations `onDelete: Cascade` (except `referredBy`, which is `SetNull`). Dates are stored as strings, not `DateTime`.
 - Never edit an applied migration. Change the schema, then run `npx prisma migrate dev --name <change>` and commit the generated folder.
 
@@ -276,7 +294,7 @@ All routes are behind `AuthGuard`. **Billing is not connected**: plans have no p
 - The sidebar logo is a button: it returns to the Home tab, closes any open mode and pushes `/dashboard`. On Sentence Mode pages the shared `Logo` is a link to `/dashboard`. The dashboard also honours `?tab=progress` on load (the Sentence sidebar's Progress link uses it).
 - Home has three selects: **My language** (`nativeLanguage`, what translations and feedback are written in), the language being learned, and level. All PATCH `/progress/settings`.
 - Home lists `MODES` from `lib/modes.ts`. Only Chat is free; the other 9 show a lock and open the upsell modal unless `s.premium`. The upsell button calls the demo `POST /progress/premium`. Language and level selects update state optimistically and PATCH `/progress/settings`.
-- Mode routing in the dashboard uses hard-coded id arrays: chat/call -> `ChatPanel` (`roleplay`, `debate` and the old `characters` are no longer reachable through it; `roleplay` and `debate` are still in the `ChatMode` type); dialogue -> `GeneratePanel`; photo -> `PhotoPanel`. **Sentence, Word, Dialogue, Roleplays, Characters, Debates and Flashcards are the exceptions**: `clickMode` does `router.push("/<id>")` (e.g. `"/characters"`, `"/roleplay"`) (after the Premium check) instead of opening a modal. The `"sentence"`, `"word"` and `"flashcards"` entries left in the `GeneratePanel` array and generate types are legacy and unreachable from Home (the old flip-card carousel in `GeneratePanel` is dead code). `FeedbackModal` (defined at the bottom of the dashboard file) calls `/ai/feedback` with `s.today`.
+- Mode routing in the dashboard uses hard-coded id arrays: chat/call -> `ChatPanel` (`roleplay`, `debate` and the old `characters` are no longer reachable through it; `roleplay` and `debate` are still in the `ChatMode` type); dialogue -> `GeneratePanel`; photo -> `PhotoPanel`. **Sentence, Word, Dialogue, Roleplays, Characters, Debates, Flashcards and Photo are the exceptions**: `clickMode` does `router.push("/<id>")` (e.g. `"/characters"`, `"/roleplay"`) (after the Premium check) instead of opening a modal. The `"sentence"`, `"word"` and `"flashcards"` entries left in the `GeneratePanel` array and generate types are legacy and unreachable from Home (the old flip-card carousel in `GeneratePanel` is dead code). `FeedbackModal` (defined at the bottom of the dashboard file) calls `/ai/feedback` with `s.today`.
 - `PracticeTimer` is mounted **only while a mode modal is open, or inside `/sentence/*`, `/word/*` and `/flashcards/*`** (`SentenceProvider`, `WordProvider` and `FlashcardsProvider` mount it), so practice time is counted only inside a mode.
 
 ### `lib/api.ts`
@@ -355,6 +373,11 @@ Flow: Home -> `/characters` -> `/characters/<characterId>` -> `/characters/<char
 - **Portraits**: tiles are a colour gradient (from `hue`) with the character's emoji by default. To use artwork, put `public/characters/<id>.jpg` files in place (ids as in `characters.catalog.ts`, roughly 4:5 portrait) and set `NEXT_PUBLIC_CHARACTER_PORTRAITS=1`; a missing file falls back to the gradient tile. No artwork is included.
 - `ReviewPanels.tsx` holds `ReviewBadge`, `FeedbackEmpty` and `FeedbackList`. The Debate practice page still has its own copies of these.
 
+### Photo pages (`app/photo`)
+
+- `/photo` (uses `SentenceShell`, back link to `/dashboard`): "Photo Mode" header and description, a progress pill with `percent`, then one bordered card per unit with a "Unit N" pill and a `done/total` pill. Each unit is **8 stars, 4 per row** (2 rows), centred, with each tile the same size as a Word Mode tile (a column is one sixth of the row, aspect 1:0.95, star size 22); a star is a link to `/photo/<id>` and turns yellow once passed. Data comes from `PhotoProvider` (`usePhoto()`), which also holds the Premium gate.
+- `/photo/<photoId>` (full screen): header "Photo Mode" with a close button (back to the grid), "Describe what you see", the picture, then an input ("Aa") with a Send button and a mic (speech recognition in the target language, Chrome/Edge). Send resizes the picture in the browser and calls `api.photos.judge`; the page then shows the star score (1-5), summary, Corrections, Better version (with Listen), New words, and **Try again / Next photo / Back to photos**. A missing image file shows a message naming the path to add. Opening a different photo resets the page.
+
 ### Roleplay pages (`app/roleplay`)
 Flow: Home -> `/roleplay` -> `/roleplay/<scenarioId>` -> `/roleplay/<scenarioId>/practice`. All pages share `RoleplayProvider` via `app/roleplay/layout.tsx` (login + Premium gate, `PracticeTimer`, loads `/progress` and the scenario grid; exposes `useRoleplay()` = `{ progress, scenarios, scenariosError, reloadScenarios }`). The grid and intro use `SentenceShell`.
 
@@ -391,6 +414,8 @@ Tailwind utility classes only (`globals.css` is just the three directives). Dark
 **Add or change a Sentence Mode skill**: edit `SENTENCE_UNITS` in `backend/src/sentence/sentence.catalog.ts` (no DB change). Add new skills with new ids; renaming or deleting an id orphans users' `SentenceProgress` rows and drops them from the percentage.
 
 **Add or change a Flashcards topic**: edit `FLASH_TOPICS` in `backend/src/flashcard/flashcard.catalog.ts` (no DB change). Use `photo` for the cover search and `hint` to steer the AI. Add new topics with new ids (never `review`); renaming or removing an id orphans users' `FlashcardDeck` rows. The grid draws whatever the server sends. To change the deck size edit `CARDS_PER_DECK` (the prompt, the Daily review cap and `MIN_CARDS` follow it; the `mark` DTO allows indexes up to 49 and `complete` totals up to 50).
+
+**Add Photo Mode photos or a unit**: put the new pictures in `frontend/public/photo/` (17.jpg, 18.jpg, ...), then add `{ number: 3, photos: range(17, 24) }` to `PHOTO_UNITS` in `backend/src/photo/photo.catalog.ts` (8 per unit keeps 2 rows of 4). No DB change. Never renumber an existing photo.
 
 **Add or change a Roleplay scenario**: edit `ROLEPLAY_SCENARIOS` in `backend/src/roleplay/roleplay.catalog.ts` (no DB change). Keep exactly three tasks, pick a `category` from `ROLEPLAY_CATEGORIES` (a new category needs the frontend `RoleplayCategory` type too, the pill draws any text), and use `photo` for the cover search. Add new scenarios with new ids; renaming or removing an id orphans users' `RoleplaySession` rows.
 
@@ -447,6 +472,8 @@ Tailwind utility classes only (`globals.css` is just the three directives). Dark
 39. **Roleplay tasks are display-only.** The AI is told the three tasks so it can create openings, but nothing tracks whether the learner did them; the check badge on the grid means "sent at least one message" in the current language. Saved chats are per language and are never refreshed when level or "My language" changes (Start over makes a new one).
 40. **Roleplay trusts the browser and Premium is UI-only** like the other modes; each turn costs 2 OpenRouter requests (reply + review), so the free daily quota drains faster than in Chat.
 41. **Roleplay migration was written by hand** (`20261020120000_roleplay_mode`) and the build was not run when it was added; run `npx prisma migrate dev` and both `npm run build`s before relying on it.
+42. **Photo pictures are not in the repo.** Photo Mode needs `frontend/public/photo/1.jpg` ... `16.jpg`; a missing file shows a "picture is missing" message on the photo page and the AI call fails client-side before it starts. The picture is sent to the model as a base64 image on every judging (about 800 px), so it needs a vision-capable model (see Photo Mode). Premium is UI-only here too.
+43. **Photo migration was written by hand** (`20261021090000_photo_mode`), so run `npx prisma migrate dev` in `backend/` to apply it. The old `PhotoPanel` + `POST /ai/photo` still exist but Home no longer opens them (`photo` is in the `router.push` list).
 
 ## Working agreements for Claude
 

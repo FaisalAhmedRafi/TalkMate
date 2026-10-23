@@ -9,6 +9,7 @@ import { CharactersModule } from './characters/characters.module';
 import { DebateModule } from './debate/debate.module';
 import { DialogueModule } from './dialogue/dialogue.module';
 import { FlashcardModule } from './flashcard/flashcard.module';
+import { PhotoModule } from './photo/photo.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProgressModule } from './progress/progress.module';
 import { RoleplayModule } from './roleplay/roleplay.module';
@@ -40,6 +41,7 @@ class HealthController {
     DebateModule,
     CharactersModule,
     RoleplayModule,
+    PhotoModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
