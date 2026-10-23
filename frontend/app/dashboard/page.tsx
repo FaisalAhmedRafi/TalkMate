@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  LayoutGrid, GraduationCap, BookOpen, Star, TrendingUp, Gift, User, Lock, ArrowRight,
+  LayoutGrid, GraduationCap, BookOpen, Library, Star, TrendingUp, Gift, User, Lock, ArrowRight,
 } from "lucide-react";
 import { Modal, Select, ErrorText } from "@/components/Modal";
 import { ChatPanel } from "@/components/ChatPanel";
@@ -11,17 +11,21 @@ import { GeneratePanel } from "@/components/GeneratePanel";
 import { PhotoPanel } from "@/components/PhotoPanel";
 import { PracticeTimer } from "@/components/PracticeTimer";
 import { ProgressView } from "@/components/ProgressView";
+import { CoursesView } from "@/components/CoursesView";
+import { LearnView } from "@/components/LearnView";
+import { courseById, loadCourseId, saveCourseId, type Course } from "@/lib/courses";
 import { AccountView } from "@/components/account/AccountView";
 import { api, clearToken, getToken, type Progress } from "@/lib/api";
 import { LANGUAGES, LEVELS, MODES, type Mode } from "@/lib/modes";
 
 const NAV = [
-  { id: "home", label: "Home", icon: LayoutGrid, dot: false, pink: false },
-  { id: "courses", label: "Courses", icon: GraduationCap, dot: true, pink: false },
-  { id: "explore", label: "Explore", icon: BookOpen, dot: false, pink: false },
-  { id: "premium", label: "Premium", icon: Star, dot: false, pink: true },
-  { id: "progress", label: "Progress", icon: TrendingUp, dot: false, pink: false },
+  { id: "home", label: "Home", icon: LayoutGrid, dot: false },
+  { id: "learn", label: "Learn", icon: BookOpen, dot: false },
+  { id: "courses", label: "Courses", icon: GraduationCap, dot: false },
+  { id: "explore", label: "Explore", icon: Library, dot: false },
+  { id: "progress", label: "Progress", icon: TrendingUp, dot: true },
 ];
+const TABS = ["learn", "courses", "progress"]; // sections that can be opened with /dashboard?tab=...
 
 const XP_PER_LEVEL = 50;
 const EMPTY: Progress = {
@@ -39,14 +43,16 @@ export default function Dashboard() {
   const [upsell, setUpsell] = useState<string | null>(null);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [courseId, setCourseId] = useState(() => courseById(loadCourseId()).id); // the course shown on Learn
 
   useEffect(() => {
     if (!getToken()) { router.replace("/login"); return; }
     api.progress.get()
       .then((p) => {
         setS(p); setLoaded(true);
-        // the Sentence Mode sidebar links here with ?tab=progress
-        if (new URLSearchParams(window.location.search).get("tab") === "progress") setActive("progress");
+        // other pages link here with ?tab=learn / ?tab=progress
+        const tab = new URLSearchParams(window.location.search).get("tab");
+        if (tab && TABS.includes(tab)) setActive(tab);
       })
       .catch((e) => setLoadError(e instanceof Error ? e.message : "Couldn't load your progress"));
   }, [router]);
@@ -81,7 +87,9 @@ export default function Dashboard() {
     if (m.id === "call" || m.id === "sentence" || m.id === "word" || m.id === "dialogue" || m.id === "characters" || m.id === "roleplay" || m.id === "debate" || m.id === "flashcards" || m.id === "photo") return router.push(`/${m.id}`); // these modes are sets of pages, not modals
     setOpenMode(m);
   };
-  const onNav = (id: string) => (id === "premium" ? setUpsell("Premium") : setActive(id));
+  const onNav = (id: string) => { setActive(id); setOpenMode(null); };
+  // a course picked on the Courses page becomes the selected course and opens its learning path
+  const openCourse = (c: Course) => { setCourseId(c.id); saveCourseId(c.id); setActive("learn"); window.scrollTo({ top: 0 }); };
 
   if (!loaded) {
     return (
@@ -103,10 +111,10 @@ export default function Dashboard() {
           <span className="text-lg font-bold tracking-tight">TalkMate</span>
         </button>
         <nav className="flex flex-col gap-1">
-          {NAV.map(({ id, label, icon: Icon, dot, pink }) => (
+          {NAV.map(({ id, label, icon: Icon, dot }) => (
             <button key={id} onClick={() => onNav(id)}
               className={`relative flex items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-semibold transition-colors ${active === id ? "bg-white/10" : "text-white/80 hover:bg-white/5"}`}>
-              <Icon size={18} className={pink ? "text-pink-500" : ""} />
+              <Icon size={18} />
               {label}
               {dot && <span className="absolute left-[34px] top-2 h-2 w-2 rounded-full bg-pink-500" />}
             </button>
@@ -216,6 +224,10 @@ export default function Dashboard() {
           </div>
         ) : active === "account" ? (
           <AccountView s={s} onLanguage={(language) => updateSettings({ language })} onLogout={logout} onToast={setToast} onSnapshot={setS} />
+        ) : active === "learn" ? (
+          <LearnView course={courseById(courseId)} premium={s.premium} onSelectCourse={openCourse} onLocked={setUpsell} />
+        ) : active === "courses" ? (
+          <CoursesView selected={courseId} onSelect={openCourse} />
         ) : active === "progress" ? (
           <ProgressView s={s} onOpenFeedback={() => setFeedbackOpen(true)} />
         ) : (

@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, LayoutGrid, LogOut, TrendingUp } from "lucide-react";
+import { ArrowLeft, BookOpen, LayoutGrid, LogOut, TrendingUp } from "lucide-react";
 import { clearToken } from "@/lib/api";
 
 /** Always takes the learner back to the dashboard. */
@@ -25,6 +25,7 @@ export function SentenceShell({ title, backHref, children }: { title: string; ba
         <Logo />
         <nav className="flex flex-col gap-1">
           <Link href="/dashboard" className={item}><LayoutGrid size={18} /> Home</Link>
+          <Link href="/dashboard?tab=learn" className={item}><BookOpen size={18} /> Learn</Link>
           <Link href="/dashboard?tab=progress" className={item}><TrendingUp size={18} /> Progress</Link>
         </nav>
         <button onClick={() => { clearToken(); router.replace("/login"); }} className={item}><LogOut size={18} /> Log out</button>
