@@ -14,6 +14,8 @@ TalkMate is an AI language-practice web app (a Talkpal-style clone; the UI even 
 
 **Photo is page-based too** (`/photo`, 2 units x 8 stars): a star grid, then a full-screen page with a picture and a text/mic box where the AI judges the learner's description (see "Photo Mode" below). The old `PhotoPanel` upload modal is now legacy.
 
+**Courses and Learn are dashboard tabs** (frontend only, no backend or DB change): Courses is a grid of 32 courses, and picking one makes it the selected course and opens Learn, a learning path of units whose three exercises open Word, Sentence and Dialogue Mode. See "Courses and Learn" below.
+
 **Account is a dashboard tab**, not a modal: target language, Personalization answers, demo Subscriptions and Refer-a-friend. See "Account" below. There is no real billing.
 
 Monorepo with two independent apps, **no root `package.json`**. Run every npm command inside `backend/` or `frontend/`.
@@ -103,13 +105,14 @@ frontend/
   app/login/page.tsx              login + register form
   app/dashboard/page.tsx          the app shell (client component)
   app/sentence/                   layout.tsx, page.tsx (unit list), [skillId]/page.tsx (skill intro), [skillId]/practice/page.tsx
-  components/                     ChatPanel, GeneratePanel, PhotoPanel, ProgressView, PracticeTimer, Modal
+  components/                     ChatPanel, GeneratePanel, PhotoPanel, ProgressView, PracticeTimer, Modal, CoursesView, LearnView
   components/sentence/            SentenceProvider (auth, Premium gate, shared data), SentenceShell (sidebar + Logo)
   components/account/             AccountView (menu), PersonalizationView, SubscriptionView, ReferView, SubPage (shared header)
   components/word/                WordProvider (auth, Premium gate, star grid data)
   components/PronunciationReview  Stars, ColoredSentence, Review (shared by Word Mode)
   app/word/                       layout.tsx, page.tsx (star grid), [wordId]/page.tsx (the lesson)
   lib/api.ts, modes.ts, dates.ts  API client + types, mode/language constants, local-date helpers
+  lib/courses.ts                  COURSES (32), the learning path of each course (pathFor), selected-course storage (see Courses and Learn)
   lib/speech.ts, sentence.ts      browser speech helpers; Sentence Mode helpers (session key, prefs, useSkillId)
   lib/word.ts, usePronunciation.ts  Word Mode helpers (useWordId, nextWordId); mic -> rating hook
   components/flashcards/          FlashcardsProvider (auth, Premium gate, PracticeTimer, topic grid data)
@@ -308,8 +311,8 @@ All routes are behind `AuthGuard`. **Billing is not connected**: plans have no p
 ### Shell and routing
 - `/` redirects to `/dashboard`. `/login` toggles between login and register and **clears the token on mount**, so visiting it logs you out. With `/login?ref=CODE` it opens the register form, shows "Invite code CODE applied." and sends `referralCode` with the registration.
 - `app/dashboard/page.tsx` (client component) holds all state: `Progress` snapshot `s`, active tab, open mode, upsell/feedback modals, toast. It redirects to `/login` if there is no token, loads `/progress`, and shows a retry screen on failure.
-- Sidebar tabs: Home, Courses, Explore, Premium, Progress, plus **Account** at the bottom (`active === "account"` renders `AccountView` in the main area; the old Account modal with only a Log out button is gone). Courses and Explore render a "This section isn't built yet" placeholder; Premium opens the upsell modal. The sidebar is `hidden md:flex`, so **on screens below `md` there is no navigation** (no way to reach Progress, Account or the gift). Fix this if mobile matters.
-- The sidebar logo is a button: it returns to the Home tab, closes any open mode and pushes `/dashboard`. On Sentence Mode pages the shared `Logo` is a link to `/dashboard`. The dashboard also honours `?tab=progress` on load (the Sentence sidebar's Progress link uses it).
+- Sidebar tabs: Home, **Learn**, Courses, Explore, Progress, plus **Account** at the bottom (`active === "account"` renders `AccountView` in the main area; the old Account modal with only a Log out button is gone). The **Premium tab was removed**; the upsell modal is still opened by a locked mode, a locked Learn exercise and the "Get premium" card on Home. Learn renders `LearnView`, Courses renders `CoursesView`, Explore is still a "This section isn't built yet" placeholder. The pink notification dot is on Progress (the `dot` flag in `NAV`). Clicking any tab also closes an open mode modal. The sidebar is `hidden md:flex`, so **on screens below `md` there is no navigation** (no way to reach Progress, Account or the gift). Fix this if mobile matters.
+- The sidebar logo is a button: it returns to the Home tab, closes any open mode and pushes `/dashboard`. On Sentence Mode pages the shared `Logo` is a link to `/dashboard`. The dashboard also honours `?tab=learn`, `?tab=courses` and `?tab=progress` on load (the `TABS` array; the Sentence/Word/Dialogue sidebar's Learn and Progress links use it).
 - Home has three selects: **My language** (`nativeLanguage`, what translations and feedback are written in), the language being learned, and level. All PATCH `/progress/settings`.
 - Home lists `MODES` from `lib/modes.ts`. Only Chat is free; the other 9 show a lock and open the upsell modal unless `s.premium`. The upsell button calls the demo `POST /progress/premium`. Language and level selects update state optimistically and PATCH `/progress/settings`.
 - Mode routing in the dashboard uses hard-coded id arrays: chat -> `ChatPanel` (`call`, `roleplay`, `debate` and the old `characters` are no longer reachable through it; they are still in the `ChatMode` type); dialogue -> `GeneratePanel`; photo -> `PhotoPanel`. **Call, Sentence, Word, Dialogue, Roleplays, Characters, Debates, Flashcards and Photo are the exceptions**: `clickMode` does `router.push("/<id>")` (e.g. `"/characters"`, `"/roleplay"`) (after the Premium check) instead of opening a modal. The `"sentence"`, `"word"` and `"flashcards"` entries left in the `GeneratePanel` array and generate types are legacy and unreachable from Home (the old flip-card carousel in `GeneratePanel` is dead code). `FeedbackModal` (defined at the bottom of the dashboard file) calls `/ai/feedback` with `s.today`.
@@ -328,7 +331,8 @@ Single API client. `BASE` = `NEXT_PUBLIC_API_URL`. Token key `talkmate-token` in
 - `components/word/WordProvider.tsx`: the same gate as `SentenceProvider` (login, Premium redirect, `PracticeTimer`) for `/word/*`, loading `/progress` and `/word/units`; exposes `useWord()` = `{ progress, units, unitsError, reloadUnits }`.
 - `components/flashcards/FlashcardsProvider.tsx`: the same gate as `WordProvider` (login, Premium redirect, `PracticeTimer`) for `/flashcards/*`, but it only loads `/progress` itself. The topic grid is loaded by the page through `reloadTopics()`; the provider just holds the state. Exposes `useFlashcards()` = `{ progress, topics, topicsError, reloadTopics }`.
 - `components/PronunciationReview.tsx`: `Stars`, `ColoredSentence` (green matched / red missed words) and `Review` (stars, feedback, tip, "We heard", Try again, Next/Finish). Used by Word Mode only; the Sentence practice page keeps its own copies.
-- `components/sentence/SentenceShell.tsx` (also used by the Word pages and the Flashcards topic grid for the sidebar and back link): fixed sidebar (Home, Progress, Log out; hidden below `md`) plus a centred column with a back link, and the exported `Logo`.
+- `components/CoursesView.tsx` and `components/LearnView.tsx`: the Courses and Learn tabs (see "Courses and Learn"). `CoursesView` also exports `tileOf(course)`, the gradient class used for course tiles (the gradient classes live in the component because Tailwind's `content` globs do not include `lib/`).
+- `components/sentence/SentenceShell.tsx` (also used by the Word pages and the Flashcards topic grid for the sidebar and back link): fixed sidebar (Home, Learn, Progress, Log out; hidden below `md`) plus a centred column with a back link, and the exported `Logo`.
 - `Modal.tsx` exports `Modal` (backdrop click and Escape close, `wide` prop), `Select` and `ErrorText`.
 - `PracticeTimer`: renders nothing; counts 1 s ticks while `document.visibilityState === "visible"`, flushes every 30 s (capped at 60 s per request) and once on unmount, calling `api.progress.time(seconds, localDay())`.
 - `lib/dates.ts`: local-date helpers (`ymd`, `localDay`, `parseDay`, `addDays`, `startOfWeek` = Monday, `shortDate`).
@@ -427,6 +431,16 @@ Flow: Home -> `/roleplay` -> `/roleplay/<scenarioId>` -> `/roleplay/<scenarioId>
 - `SubscriptionView`: shows one of three states. With no plan: a "Get Premium (demo)" button that calls `api.progress.premium()` (starting a demo plan) and reloads the subscription. With a plan: a card with plan length and the next payment or access-until date, Change plan (modal with the four lengths), Pause/Resume, Cancel (confirmation modal), and Resubscribe when cancelled. After every action, and once on mount, it re-fetches `/progress` and passes it to `onSnapshot`, because the Premium flag can change (a lapsed plan switches it off). A note says billing is not connected.
 - `SubPage` is the shared back-arrow header. Toasts go through the dashboard's `setToast`.
 
+### Courses and Learn (`components/CoursesView.tsx`, `components/LearnView.tsx`, `lib/courses.ts`)
+Frontend only: no endpoint, no migration. Both are tabs inside `app/dashboard/page.tsx`, not routes.
+
+- **Data** (`lib/courses.ts`): `COURSES` is 32 entries in three groups (`level` 12 with a CEFR `badge` A1.1 to C2.2, `lifestyle` 10, `professional` 10). A `Unit` is `{ title, word, sentence, dialogue }`: Exercise 1 opens `/word/<word>`, Exercise 2 `/sentence/<sentence>`, Exercise 3 `/dialogue/<dialogue>`. Those ids must exist in the backend catalogs (`word.catalog.ts`, `sentence.catalog.ts`, `dialogue.catalog.ts`); the lists `WORDS`, `SENTENCES`, `DIALOGUES` at the bottom of the file are copies of them.
+- **Paths**: only "Absolute beginner 1" has a hand-written path (`ABSOLUTE_BEGINNER_1`, the ten units from the design). Every other course gets `pathFor(course)`: 10 units built from the existing catalogs (sentence skills and words rotate by the course's position; lifestyle and professional courses put their `dialogues` hints first and name units after the dialogue topic). Those paths are **placeholders** until real ones are written.
+- **Selected course**: `courseId` state in the dashboard, persisted in `localStorage` key `talkmate-course` (`loadCourseId`/`saveCourseId`, default `absolute-beginner-1`). Not stored on the server, so it does not follow the user to another browser.
+- **Courses tab**: `CoursesView` shows the three groups as 2-column card grids (gradient tile with an emoji, title, description, badge). A card calls `openCourse(course)` in the dashboard: save the id, `setActive("learn")`, scroll to top. The selected card is not highlighted (a purple outline was removed on purpose).
+- **Learn tab**: `LearnView` shows the course picker (a popover listing all courses, same `openCourse`), a percent bar and the units, each with three exercise rows. On mount it calls `api.word.units()`, `api.sentence.units()` and `api.dialogue.topics()` together (`Promise.allSettled`, so one failing mode only hides its check marks) to get the emoji, dialogue cover and `passed` flag of each exercise. Percent = passed exercises / (units x 3). The book button on a unit opens a `Modal` listing its three lessons. Rows are `Link`s for Premium users; for everyone else a click calls `onLocked(mode)`, which opens the same upsell modal as a locked mode on Home.
+- The exercise pages themselves are unchanged, so after finishing one the learner lands back on Home (their back links point at `/dashboard`), not on Learn.
+
 ### Styling and TypeScript
 Tailwind utility classes only (`globals.css` is just the three directives). Dark theme: page `bg-[#16161c]`, cards `bg-[#1f1f27]`, indigo-600 primary, pink accents for premium, `white/10` surfaces. Keep new UI consistent with this. `tsconfig` is `strict`; path alias `@/*` = frontend root. Client components start with `"use client"`. Frontend uses double quotes and 2-space indent; backend uses single quotes.
 
@@ -455,6 +469,8 @@ Tailwind utility classes only (`globals.css` is just the three directives). Dark
 **Add a Personalization question**: add an entry to `QUESTIONS` in `backend/src/account/account.options.ts`, add its key to `PersonalizationDto` (`account.dto.ts`) and to the `Personalization` model, then run a migration. The frontend renders it automatically. Nothing uses the answers until you wire them into prompts.
 
 **Change plan lengths**: `PLAN_MONTHS` in `backend/src/account/subscription.util.ts` and `PLANS` in `SubscriptionView.tsx`.
+
+**Add or change a course path**: add a `lvl(...)`/`life(...)`/`pro(...)` entry to `COURSES` in `frontend/lib/courses.ts` (new ids only; the id is what `talkmate-course` stores), and give it a `units` array of `u(title, wordId, sentenceSkillId, dialogueTopicId)` to replace the generated path. Check every id against the backend catalogs; a wrong id opens a broken exercise page. New catalog content is added with the existing Word/Sentence/Dialogue recipes, then referenced here.
 
 **Add an API field**: DTO (validators) -> service -> `lib/api.ts` types/helpers -> callers. Remember `whitelist: true` drops undeclared fields.
 
@@ -503,6 +519,12 @@ Tailwind utility classes only (`globals.css` is just the three directives). Dark
 41. **Roleplay migration was written by hand** (`20261020120000_roleplay_mode`) and the build was not run when it was added; run `npx prisma migrate dev` and both `npm run build`s before relying on it.
 42. **Photo pictures are not in the repo.** Photo Mode needs `frontend/public/photo/1.jpg` ... `16.jpg`; a missing file shows a "picture is missing" message on the photo page and the AI call fails client-side before it starts. The picture is sent to the model as a base64 image on every judging (about 800 px), so it needs a vision-capable model (see Photo Mode). Premium is UI-only here too.
 43. **Photo migration was written by hand** (`20261021090000_photo_mode`), so run `npx prisma migrate dev` in `backend/` to apply it. The old `PhotoPanel` + `POST /ai/photo` still exist but Home no longer opens them (`photo` is in the `router.push` list).
+
+44. **Course paths are mostly generated.** Only "Absolute beginner 1" has hand-picked units; the other 31 courses reuse the same 120 words, 30 sentence skills and 21 dialogues in a rotation, so units repeat across courses and the titles do not always match the exercises. Course cards and exercise avatars use emoji on gradients (no illustrations).
+45. **Course ids are duplicated.** `WORDS`, `SENTENCES` and `DIALOGUES` in `lib/courses.ts` copy ids from the backend catalogs. Renaming or removing a catalog id (which the catalogs already forbid) would break Learn links silently.
+46. **Learn progress is borrowed.** Check marks and the percent are read from Word, Sentence and Dialogue progress, so the same exercise shows as done in every course that uses it, and Word progress is per target language. The selected course lives only in the browser's `localStorage`.
+47. **Learn is UI-gated like everything else**: non-Premium users get the upsell on click, but the exercise URLs and the backend routes stay open.
+48. **Learn was added without running `npm run build`** (no `node_modules` in that environment); run it, and click through Courses -> Learn -> an exercise, before relying on it. Tailwind classes written in `lib/` are not generated (its `content` globs only cover `app/` and `components/`), which is why the course gradients are in `CoursesView.tsx`.
 
 ## Working agreements for Claude
 
