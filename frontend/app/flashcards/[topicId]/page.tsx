@@ -263,7 +263,7 @@ export default function FlashcardDeckPage() {
                 {card.image && !imgFailed && (
                   <p className="mt-2 text-center text-[11px] text-white/40">
                     Photo by <a href={card.image.creditUrl} target="_blank" rel="noreferrer" className="underline">{card.image.credit}</a> on{" "}
-                    <a href="https://www.pexels.com" target="_blank" rel="noreferrer" className="underline">Pexels</a>
+                    <a href={card.image.sourceUrl ?? "https://www.pexels.com"} target="_blank" rel="noreferrer" className="underline">{card.image.source ?? "Pexels"}</a>
                   </p>
                 )}
               </div>

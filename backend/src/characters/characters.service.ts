@@ -3,6 +3,7 @@ import { Learner } from '../ai/prompts';
 import { OpenRouterService } from '../ai/openrouter.service';
 import { PrismaService } from '../prisma/prisma.module';
 import { ProgressService } from '../progress/progress.service';
+import { CharacterPhotoService } from './characters.photos';
 import { CHARACTERS, findCharacter } from './characters.catalog';
 import {
   CharacterFeedbackDto, CharacterReplyDto, CharacterSaveDto, CharacterSessionQueryDto, CharacterStartDto, CharacterTranslateDto,
@@ -33,6 +34,7 @@ export class CharactersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly or: OpenRouterService,
+    private readonly photos: CharacterPhotoService,
     private readonly progress: ProgressService,
   ) {}
 
@@ -41,11 +43,12 @@ export class CharactersService {
     const language = await this.language(userId);
     const rows = await this.prisma.characterSession.findMany({ where: { userId, language }, select: { characterId: true, count: true } });
     const saved = new Map<string, number>(rows.filter((r) => findCharacter(r.characterId)).map((r): [string, number] => [r.characterId, r.count]));
+    await this.photos.ensure(); // Wikipedia pictures, downloaded once (see characters.photos.ts)
     return {
       total: CHARACTERS.length,
       talked: [...saved.values()].filter((n) => n > 0).length,
       characters: CHARACTERS.map((c) => ({
-        id: c.id, name: c.name, emoji: c.emoji, hue: c.hue, kind: c.kind, about: c.about,
+        id: c.id, name: c.name, emoji: c.emoji, hue: c.hue, kind: c.kind, about: c.about, cover: this.photos.cover(c.id),
         saved: saved.get(c.id) ?? 0, // learner messages in the saved conversation (0 = none)
       })),
     };

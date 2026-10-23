@@ -42,7 +42,7 @@ export default function RoleplayScenariosPage() {
           </Link>
         ))}
       </div>
-      {scenarios && <p className="mt-6 text-center text-[11px] text-white/40">Photos from <a href="https://www.pexels.com" target="_blank" rel="noreferrer" className="underline">Pexels</a></p>}
+      {scenarios && <p className="mt-6 text-center text-[11px] text-white/40">Photos from <a href="https://pixabay.com" target="_blank" rel="noreferrer" className="underline">Pixabay</a> and <a href="https://www.pexels.com" target="_blank" rel="noreferrer" className="underline">Pexels</a></p>}
     </SentenceShell>
   );
 }

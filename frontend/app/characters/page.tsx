@@ -28,7 +28,7 @@ export default function CharactersPage() {
           <Link key={c.id} href={`/characters/${c.id}`} aria-label={c.saved > 0 ? `${c.name}, conversation started` : c.name}
             className="group relative block h-[150px] overflow-hidden rounded-2xl border border-white/10 bg-[#1c1c24] sm:h-[190px]">
             <div className="h-full w-full transition-transform duration-300 group-hover:scale-105">
-              <CharacterPortrait id={c.id} emoji={c.emoji} hue={c.hue} />
+              <CharacterPortrait id={c.id} emoji={c.emoji} hue={c.hue} cover={c.cover} />
             </div>
             {/* darkened top edge keeps the white name readable on any picture */}
             <div className="pointer-events-none absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-black/70 to-transparent" />
@@ -39,6 +39,7 @@ export default function CharactersPage() {
           </Link>
         ))}
       </div>
+      {list && <p className="mt-6 text-center text-[11px] text-white/40">Pictures from <a href="https://www.wikipedia.org" target="_blank" rel="noreferrer" className="underline">Wikipedia</a></p>}
     </SentenceShell>
   );
 }

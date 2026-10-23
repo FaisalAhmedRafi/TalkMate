@@ -2,12 +2,15 @@ import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { json } from 'express';
+import { join } from 'path';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { bodyParser: false });
   app.set('trust proxy', 1);
   app.use(json({ limit: '6mb' }));
+  // stock photos downloaded from Pixabay (see WordImageService)
+  app.useStaticAssets(join(process.cwd(), 'media'), { prefix: '/media/', maxAge: '7d' });
   const origins = (process.env.FRONTEND_URL ?? 'http://localhost:3000').split(',').map((s) => s.trim());
   app.enableCors({ origin: origins });
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));

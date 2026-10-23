@@ -15,7 +15,7 @@ export type Stats = {
   days: { day: string; seconds: number }[]; achievements: Achievement[];
 };
 export type SentenceSkill = {
-  id: string; title: string; description: string; emoji: string; passed: boolean; bestScore: number; attempts: number;
+  id: string; title: string; description: string; emoji: string; cover?: string | null; passed: boolean; bestScore: number; attempts: number;
 };
 export type SentenceUnit = { number: number; title: string; skills: SentenceSkill[] };
 export type SentenceUnits = { percent: number; passed: number; total: number; units: SentenceUnit[] };
@@ -28,7 +28,7 @@ export type WordSentence = { sentence: string; translation: string; note: string
 export type WordLesson = {
   wordId: string; emoji: string; word: string; translation: string; sentences: WordSentence[];
   step: number; scores: (number | null)[]; resumed: boolean;
-  image: { url: string; credit: string; creditUrl: string } | null;
+  image: FlashImage | null;
 };
 export type PhotoItem = { id: string; image: string; passed: boolean; bestScore: number };
 export type PhotoUnits = { language: string; percent: number; passed: number; total: number; units: { number: number; photos: PhotoItem[] }[] };
@@ -40,7 +40,7 @@ export type PhotoJudgement = {
   betterTranslation: string;
   words: { word: string; translation: string }[];
 };
-export type FlashImage = { url: string; credit: string; creditUrl: string };
+export type FlashImage = { url: string; credit: string; creditUrl: string; source?: string; sourceUrl?: string };
 export type FlashTopicInfo = { id: string; title: string; emoji: string; total: number; known: number; completed: boolean; cover: string | null };
 export type FlashTopics = { language: string; reviewCount: number; topics: FlashTopicInfo[] };
 export type DialogueTopicInfo = { id: string; title: string; emoji: string; partner: string; partnerEmoji: string; cover: string | null; passed: boolean; bestScore: number; attempts: number };
@@ -64,7 +64,7 @@ export type DebateSaved = {
 };
 export type CharacterKind = "history" | "myth" | "fiction";
 export type CharacterInfo = {
-  id: string; name: string; emoji: string; hue: number; kind: CharacterKind; about: string;
+  id: string; name: string; emoji: string; hue: number; kind: CharacterKind; about: string; cover?: string | null;
   saved: number; // learner messages in the saved conversation (0 = none)
 };
 export type CharacterList = { total: number; talked: number; characters: CharacterInfo[] };

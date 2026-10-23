@@ -234,7 +234,7 @@ export default function WordLessonPage() {
                 {lesson.image && !imgFailed && (
                   <p className="mt-2 text-center text-[11px] text-white/40">
                     Photo by <a href={lesson.image.creditUrl} target="_blank" rel="noreferrer" className="underline">{lesson.image.credit}</a> on{" "}
-                    <a href="https://www.pexels.com" target="_blank" rel="noreferrer" className="underline">Pexels</a>
+                    <a href={lesson.image.sourceUrl ?? "https://www.pexels.com"} target="_blank" rel="noreferrer" className="underline">{lesson.image.source ?? "Pexels"}</a>
                   </p>
                 )}
                 {noVoice && <p className="mt-4 rounded-lg bg-amber-500/15 px-3 py-2 text-sm text-amber-200">Your browser has no {progress.language} voice installed, so the audio may not play.</p>}

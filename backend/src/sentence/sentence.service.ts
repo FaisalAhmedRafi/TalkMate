@@ -3,6 +3,8 @@ import { Learner } from '../ai/prompts';
 import { OpenRouterService } from '../ai/openrouter.service';
 import { PrismaService } from '../prisma/prisma.module';
 import { ProgressService } from '../progress/progress.service';
+import { SENTENCE_PHOTO } from '../explore/photo-queries';
+import { WordImageService } from '../word/word.images';
 import { findSkill, SENTENCE_UNITS, TOTAL_SKILLS } from './sentence.catalog';
 import { CompleteDto, EvaluateDto, SessionDto } from './sentence.dto';
 import { evaluateSystem, SENTENCES_PER_SESSION, sessionSystem } from './sentence.prompts';
@@ -36,6 +38,7 @@ export class SentenceService {
     private readonly prisma: PrismaService,
     private readonly or: OpenRouterService,
     private readonly progress: ProgressService,
+    private readonly images: WordImageService,
   ) {}
 
   /** Unit list with the learner's progress on each skill. */
@@ -43,6 +46,11 @@ export class SentenceService {
     const rows = await this.prisma.sentenceProgress.findMany({ where: { userId } });
     const byId = new Map(rows.map((r) => [r.skillId, r]));
     const passed = rows.filter((r) => r.passed && findSkill(r.skillId)).length;
+    // a stock photo per lesson for Explore (null without a Pixabay/Pexels key; cached after the first lookup)
+    const covers = new Map(
+      await Promise.all(SENTENCE_UNITS.flatMap((u) => u.skills).map(async (k): Promise<[string, string | null]> =>
+        [k.id, (await this.images.search(`sentence-cover:${k.id}`, SENTENCE_PHOTO[k.id] ?? ''))?.url ?? null])),
+    );
     return {
       percent: Math.round((passed / TOTAL_SKILLS) * 100),
       passed,
@@ -52,7 +60,7 @@ export class SentenceService {
         title: u.title,
         skills: u.skills.map((k) => {
           const r = byId.get(k.id);
-          return { ...k, passed: r?.passed ?? false, bestScore: r?.bestScore ?? 0, attempts: r?.attempts ?? 0 };
+          return { ...k, cover: covers.get(k.id) ?? null, passed: r?.passed ?? false, bestScore: r?.bestScore ?? 0, attempts: r?.attempts ?? 0 };
         }),
       })),
     };

@@ -13,6 +13,7 @@ import { PracticeTimer } from "@/components/PracticeTimer";
 import { ProgressView } from "@/components/ProgressView";
 import { CoursesView } from "@/components/CoursesView";
 import { LearnView } from "@/components/LearnView";
+import { ExploreView } from "@/components/ExploreView";
 import { courseById, loadCourseId, saveCourseId, type Course } from "@/lib/courses";
 import { AccountView } from "@/components/account/AccountView";
 import { api, clearToken, getToken, type Progress } from "@/lib/api";
@@ -25,7 +26,7 @@ const NAV = [
   { id: "explore", label: "Explore", icon: Library, dot: false },
   { id: "progress", label: "Progress", icon: TrendingUp, dot: true },
 ];
-const TABS = ["learn", "courses", "progress"]; // sections that can be opened with /dashboard?tab=...
+const TABS = ["learn", "courses", "explore", "progress"]; // sections that can be opened with /dashboard?tab=...
 
 const XP_PER_LEVEL = 50;
 const EMPTY: Progress = {
@@ -228,6 +229,8 @@ export default function Dashboard() {
           <LearnView course={courseById(courseId)} premium={s.premium} onSelectCourse={openCourse} onLocked={setUpsell} />
         ) : active === "courses" ? (
           <CoursesView selected={courseId} onSelect={openCourse} />
+        ) : active === "explore" ? (
+          <ExploreView premium={s.premium} onLocked={setUpsell} />
         ) : active === "progress" ? (
           <ProgressView s={s} onOpenFeedback={() => setFeedbackOpen(true)} />
         ) : (
