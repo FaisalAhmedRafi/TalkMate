@@ -1,5 +1,5 @@
 "use client";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { SentenceShell } from "@/components/sentence/SentenceShell";
 import { useSentence } from "@/components/sentence/SentenceProvider";
@@ -11,6 +11,7 @@ export default function SentenceSkillPage() {
   const router = useRouter();
   const { units, progress } = useSentence();
   const skill = units?.units.flatMap((u) => u.skills).find((k) => k.id === skillId);
+  const [coverFailed, setCoverFailed] = useState(false);
 
   useEffect(() => {
     if (units && !skill) router.replace("/sentence"); // unknown skill id
@@ -34,8 +35,13 @@ export default function SentenceSkillPage() {
         <p className="mt-8 text-white/60">Loading…</p>
       ) : (
         <div className="mt-6 flex flex-col gap-5 rounded-2xl border border-white/5 bg-[#1f1f27] p-5 sm:flex-row">
-          <div className="flex h-56 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 via-violet-500 to-pink-500 text-7xl sm:h-auto sm:w-[200px]">
-            {skill.emoji}
+          <div className="relative h-56 shrink-0 overflow-hidden rounded-xl sm:h-auto sm:min-h-[200px] sm:w-[200px]">
+            {skill.cover && !coverFailed ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={skill.cover} alt="" onError={() => setCoverFailed(true)} className="absolute inset-0 h-full w-full object-cover" />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-indigo-500 via-violet-500 to-pink-500 text-7xl" aria-hidden="true">{skill.emoji}</div>
+            )}
           </div>
           <div className="flex flex-1 flex-col">
             <h1 className="text-lg font-semibold">{skill.title}</h1>

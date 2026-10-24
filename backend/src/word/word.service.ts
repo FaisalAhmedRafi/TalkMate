@@ -97,6 +97,13 @@ export class WordService {
     };
   }
 
+  /** Stock photos for a few words (Explore shows these instead of emoji). Unknown ids are skipped; null without an image key. */
+  async covers(ids: string[]) {
+    const found = [...new Set(ids)].slice(0, 12).map((id) => findWord(id)).filter((f): f is NonNullable<ReturnType<typeof findWord>> => !!f);
+    const entries = await Promise.all(found.map(async (f): Promise<[string, string | null]> => [f.word.id, (await this.images.find(f.word))?.url ?? null]));
+    return { covers: Object.fromEntries(entries) as Record<string, string | null> };
+  }
+
   /** Open a lesson: resume the saved one, or make a new one with the AI. */
   async start(userId: string, dto: WordStartDto) {
     const found = findWord(dto.wordId);

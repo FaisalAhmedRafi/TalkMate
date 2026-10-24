@@ -70,6 +70,14 @@ export function ExploreView({ premium, onLocked }: { premium: boolean; onLocked:
   const debates = data ? open(without(data.debate, "debate"), 2, "debate", (t) => t.debated) : [];
   const sentences = data ? open(data.sentences, 2, "sentence", (s) => s.passed) : [];
   const words = data ? open(data.words, 5, "word", (w) => w.passed) : [];
+  const wordKey = words.map((w) => w.id).join(",");
+  const [wordCovers, setWordCovers] = useState<Record<string, string | null>>({});
+  useEffect(() => {
+    if (!wordKey) return;
+    let live = true;
+    api.word.covers(wordKey.split(",")).then((r) => { if (live) setWordCovers(r.covers); }).catch(() => {});
+    return () => { live = false; };
+  }, [wordKey]);
   const photos = data ? open(data.photos, 5, "photo", (p) => p.passed) : [];
 
   return (
@@ -128,7 +136,7 @@ export function ExploreView({ premium, onLocked }: { premium: boolean; onLocked:
             {photos.length > 0 && (
               <Card mode="photo" sub="Complete the decks">
                 <Strip>
-                  {photos.map((p) => <PhotoThumb key={p.id} item={p} />)}
+                  {photos.map((p) => <Thumb key={p.id} src={p.image} emoji="🖼️" seed={p.id} />)}
                 </Strip>
                 {link("photo", `/photo/${photos[0].id}`, "Start now", "mt-5 block w-full rounded-xl bg-[#3a3b4e] py-4 text-center text-xs font-semibold hover:bg-[#44455c]")}
               </Card>
@@ -148,9 +156,7 @@ export function ExploreView({ premium, onLocked }: { premium: boolean; onLocked:
             {words.length > 0 && (
               <Card mode="word" sub="Complete the decks">
                 <Strip>
-                  {words.map((w) => (
-                    <span key={w.id} className={`flex aspect-square w-full items-center justify-center rounded-lg bg-gradient-to-br text-2xl ${tile(w.id)}`} aria-hidden="true">{w.emoji}</span>
-                  ))}
+                  {words.map((w) => <Thumb key={w.id} src={wordCovers[w.id] ?? null} emoji={w.emoji} seed={w.id} />)}
                 </Strip>
                 {link("word", `/word/${words[0].id}`, "Play now", "mt-5 block w-full rounded-xl bg-[#3a3b4e] py-4 text-center text-xs font-semibold hover:bg-[#44455c]")}
               </Card>
@@ -257,16 +263,21 @@ const Title = ({ text }: { text: string }) => (
   <span lang="en" style={{ hyphens: "auto" }} className="absolute left-3 right-3 top-3 text-[15px] font-semibold leading-tight text-white drop-shadow">{text}</span>
 );
 
-/** A row of five small overlapping thumbnails. */
-const Strip = ({ children }: { children: ReactNode }) => <div className="flex items-center [&>*]:-ml-1 [&>*:first-child]:ml-0 [&>*]:rounded-lg [&>*]:ring-2 [&>*]:ring-[#1f1f27]">{children}</div>;
+/** A row of five equal square thumbnails (slightly overlapping). */
+const Strip = ({ children }: { children: ReactNode }) => <div className="flex items-center [&>*:first-child]:ml-0 [&>*]:-ml-1 [&>*]:rounded-lg [&>*]:ring-2 [&>*]:ring-[#1f1f27]">{children}</div>;
 
-function PhotoThumb({ item }: { item: PhotoItem }) {
+/** One square slot of fixed size: the picture fills it (cropped), or an emoji on a gradient if there is none yet. */
+function Thumb({ src, emoji, seed }: { src: string | null; emoji: string; seed: string }) {
   const [failed, setFailed] = useState(false);
-  return failed
-    // eslint-disable-next-line @next/next/no-img-element
-    ? <span className={`flex aspect-square w-full items-center justify-center bg-gradient-to-br text-xl ${tile(item.id)}`} aria-hidden="true">🖼️</span>
-    // eslint-disable-next-line @next/next/no-img-element
-    : <img src={item.image} alt="" loading="lazy" onError={() => setFailed(true)} className="aspect-square w-full object-cover" />;
+  useEffect(() => setFailed(false), [src]);
+  return (
+    <span className={`relative block aspect-square min-w-0 flex-1 basis-0 overflow-hidden bg-gradient-to-br ${tile(seed)}`}>
+      {src && !failed
+        // eslint-disable-next-line @next/next/no-img-element
+        ? <img src={src} alt="" loading="lazy" onError={() => setFailed(true)} className="absolute inset-0 h-full w-full object-cover" />
+        : <span className="absolute inset-0 flex items-center justify-center text-2xl" aria-hidden="true">{emoji}</span>}
+    </span>
+  );
 }
 
 /** Swipeable row with a 1/5 counter and arrow buttons. Items are snap-aligned; the counter follows the scroll position. */

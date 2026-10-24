@@ -185,6 +185,7 @@ export const api = {
   },
   word: {
     units: () => request<WordUnits>("GET", "/word/units"),
+    covers: (ids: string[]) => request<{ covers: Record<string, string | null> }>("GET", `/word/covers?ids=${encodeURIComponent(ids.join(","))}`),
     /** Opens a lesson: resumes an unfinished one, unless restart is true */
     start: (wordId: string, b: Learner & { restart?: boolean }) => {
       if (!wordId) throw new Error("Couldn't tell which word to practise. Go back and pick one.");
