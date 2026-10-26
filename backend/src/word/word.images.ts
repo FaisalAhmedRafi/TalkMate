@@ -5,8 +5,11 @@ import { writeFile } from 'fs/promises';
 import { join } from 'path';
 import { WordItem } from './word.catalog';
 
-export const MEDIA_DIR =
-  process.env.MEDIA_DIR || process.env.RAILWAY_VOLUME_MOUNT_PATH || join(process.cwd(), 'media');
+/**
+ * Where downloaded stock photos live. On Railway this is the attached volume (RAILWAY_VOLUME_MOUNT_PATH), so the
+ * pictures survive redeploys; MEDIA_DIR can override it; locally it is ./media. main.ts serves this folder at /media/.
+ */
+export const MEDIA_DIR = process.env.MEDIA_DIR || process.env.RAILWAY_VOLUME_MOUNT_PATH || join(process.cwd(), 'media');
 
 export type WordImage = { url: string; credit: string; creditUrl: string; source?: string; sourceUrl?: string };
 
@@ -34,6 +37,7 @@ export class WordImageService {
   constructor(private readonly cfg: ConfigService) {
     try {
       mkdirSync(this.dir, { recursive: true });
+      this.log.log(`Photo folder: ${this.dir}`);
       if (existsSync(this.indexFile)) this.index = JSON.parse(readFileSync(this.indexFile, 'utf8'));
     } catch (e) {
       this.log.warn(`Pixabay cache folder not usable: ${(e as Error).message}`);
@@ -58,7 +62,8 @@ export class WordImageService {
   }
 
   private publicUrl(id: number): string {
-    const base = (this.cfg.get<string>('PUBLIC_API_URL') || `http://localhost:${this.cfg.get<string>('PORT') || 4000}`).replace(/\/+$/, '');
+    let base = (this.cfg.get<string>('PUBLIC_API_URL') || `http://localhost:${this.cfg.get<string>('PORT') || 4000}`).trim().replace(/\/+$/, '');
+    if (!/^https?:\/\//i.test(base)) base = `https://${base}`; // a value saved without https:// would become a path on the frontend
     return `${base}/media/pixabay/${id}.jpg`;
   }
 
@@ -68,18 +73,27 @@ export class WordImageService {
 
   private async fromPixabay(key: string, query: string): Promise<WordImage | null> {
     const q = query.trim().toLowerCase().slice(0, 100);
-    const saved = this.index[q];
+    // 'v2|' = picks made by the best-of-20 scoring below; bump it to make every photo be chosen again
+    const idxKey = `v2|${q}`;
+    const saved = this.index[idxKey];
     if (saved && existsSync(join(this.dir, `${saved.id}.jpg`))) return this.toImage(saved);
     try {
       const res = await fetch(
-        `https://pixabay.com/api/?key=${encodeURIComponent(key)}&q=${encodeURIComponent(q)}&image_type=photo&orientation=horizontal&safesearch=true&per_page=3`,
+        `https://pixabay.com/api/?key=${encodeURIComponent(key)}&q=${encodeURIComponent(q)}&image_type=photo&orientation=horizontal&safesearch=true&min_width=640&per_page=20`,
         { signal: AbortSignal.timeout(6000) },
       );
       if (!res.ok) {
         this.log.warn(`Pixabay "${q}" -> ${res.status}`);
         return null;
       }
-      const p = (await res.json())?.hits?.[0];
+      // pick the most relevant of the 20 results: tags that match the search words count most, popularity breaks ties
+      const words = q.split(/\s+/).filter((w) => w.length > 2);
+      const score = (h: any) =>
+        words.filter((w) => String(h.tags ?? '').toLowerCase().includes(w)).length * 10 +
+        Math.log10((h.likes ?? 0) + 1) +
+        Math.log10((h.downloads ?? 0) + 1) * 0.5;
+      const hits: any[] = (await res.json())?.hits ?? [];
+      const p = hits.filter((h) => h?.id && h?.webformatURL).sort((a, b) => score(b) - score(a))[0];
       if (!p?.id || !p?.webformatURL) return null;
       // download now: the webformatURL stops working after 24 hours and hotlinking is not allowed
       const img = await fetch(String(p.webformatURL), { signal: AbortSignal.timeout(10000) });
@@ -89,7 +103,7 @@ export class WordImageService {
       }
       await writeFile(join(this.dir, `${Number(p.id)}.jpg`), Buffer.from(await img.arrayBuffer()));
       const entry: Saved = { id: Number(p.id), user: String(p.user ?? ''), page: String(p.pageURL ?? '') };
-      this.index[q] = entry;
+      this.index[idxKey] = entry;
       // one write at a time so parallel lookups cannot interleave into a broken file
       this.saving = this.saving.then(() => writeFile(this.indexFile, JSON.stringify(this.index))).catch(() => undefined);
       return this.toImage(entry);
