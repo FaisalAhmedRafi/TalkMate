@@ -5,6 +5,9 @@ import { writeFile } from 'fs/promises';
 import { join } from 'path';
 import { WordItem } from './word.catalog';
 
+export const MEDIA_DIR =
+  process.env.MEDIA_DIR || process.env.RAILWAY_VOLUME_MOUNT_PATH || join(process.cwd(), 'media');
+
 export type WordImage = { url: string; credit: string; creditUrl: string; source?: string; sourceUrl?: string };
 
 type Saved = { id: number; user: string; page: string };
@@ -23,7 +26,7 @@ type Saved = { id: number; user: string; page: string };
 export class WordImageService {
   private readonly log = new Logger(WordImageService.name);
   private readonly cache = new Map<string, WordImage>();
-  private readonly dir = join(process.cwd(), 'media', 'pixabay');
+  private readonly dir = join(MEDIA_DIR, 'pixabay');
   private readonly indexFile = join(this.dir, 'index.json');
   private index: Record<string, Saved> = {};
   private saving: Promise<void> = Promise.resolve();
