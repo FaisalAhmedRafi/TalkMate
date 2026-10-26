@@ -233,7 +233,7 @@ export default function CharacterPracticePage() {
             <div className="flex items-center gap-3">
               <div className="relative">
                 <div className="h-9 w-9 overflow-hidden rounded-full">
-                  {portrait && <CharacterPortrait id={characterId} emoji={portrait.emoji} hue={portrait.hue} emojiClass="text-lg !pt-0" />}
+                  {portrait && <CharacterPortrait id={characterId} emoji={portrait.emoji} hue={portrait.hue} cover={info?.cover} emojiClass="text-lg !pt-0" />}
                 </div>
                 <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#1f1f27] bg-green-500" />
               </div>

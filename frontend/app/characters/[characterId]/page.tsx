@@ -32,7 +32,7 @@ export default function CharacterIntroPage() {
       ) : (
         <div className="mt-6 flex flex-col gap-5 rounded-2xl border border-white/10 bg-[#1c1c24] p-4 sm:flex-row">
           <div className="h-64 shrink-0 overflow-hidden rounded-xl sm:h-[412px] sm:w-[310px]">
-            <CharacterPortrait id={c.id} emoji={c.emoji} hue={c.hue} emojiClass="text-7xl" />
+            <CharacterPortrait id={c.id} emoji={c.emoji} hue={c.hue} cover={c.cover} emojiClass="text-7xl" />
           </div>
           <div className="flex flex-1 flex-col">
             <h1 className="text-lg font-semibold">{c.name}</h1>
