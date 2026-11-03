@@ -1,30 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import { Building2, CalendarCheck, Check, ChevronRight, Gift, LifeBuoy, LogOut, Settings, SlidersHorizontal, User, type LucideIcon } from "lucide-react";
-import { Modal } from "@/components/Modal";
+import { Building2, CalendarCheck, Gift, LifeBuoy, LogOut, Settings, SlidersHorizontal, User, type LucideIcon } from "lucide-react";
 import type { Progress } from "@/lib/api";
-import { LANGUAGES } from "@/lib/modes";
 import { PersonalizationView } from "./PersonalizationView";
 import { ReferView } from "./ReferView";
+import { SettingsView } from "./SettingsView";
 import { SubPage } from "./SubPage";
 import { SubscriptionView } from "./SubscriptionView";
 
 type View = "menu" | "personalization" | "subscriptions" | "refer" | "profile" | "settings" | "organizations" | "support";
 
-// Two-letter badges instead of flag emoji: Windows does not draw flag emoji.
-const LANG_CODE: Record<string, string> = {
-  Spanish: "ES", French: "FR", German: "DE", Italian: "IT", Chinese: "ZH", Japanese: "JA",
-  Korean: "KO", Hindi: "HI", Bengali: "BN", English: "EN", Russian: "RU", Arabic: "AR",
-};
-const Badge = ({ lang }: { lang: string }) => (
-  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-indigo-600 text-[10px] font-bold">{LANG_CODE[lang] ?? "??"}</span>
-);
-
 // Sections that are not built yet
 const EMPTY_PAGES: Partial<Record<View, { title: string; subtitle: string }>> = {
   profile: { title: "Profile", subtitle: "Manage your profile details." },
-  settings: { title: "Settings", subtitle: "Manage your account settings." },
   organizations: { title: "For organizations", subtitle: "Partnerships with TalkMate." },
   support: { title: "Support", subtitle: "Help center and contact." },
 };
@@ -49,15 +38,15 @@ function Row({ icon: Icon, title, sub, onClick, danger }: {
 }
 const card = "overflow-hidden rounded-2xl border border-white/5 bg-[#1f1f27]";
 
-export function AccountView({ s, onLanguage, onLogout, onToast, onSnapshot }: {
-  s: Progress; onLanguage: (language: string) => void; onLogout: () => void;
+export function AccountView({ s, onSettings, onLogout, onToast, onSnapshot }: {
+  s: Progress; onSettings: (patch: { language?: string; nativeLanguage?: string; level?: string }) => void; onLogout: () => void;
   onToast: (message: string) => void; onSnapshot: (p: Progress) => void;
 }) {
   const [view, setView] = useState<View>("menu");
-  const [langOpen, setLangOpen] = useState(false);
   const back = () => setView("menu");
 
   if (view === "personalization") return <PersonalizationView onBack={back} onToast={onToast} />;
+  if (view === "settings") return <SettingsView s={s} onBack={back} onSettings={onSettings} onToast={onToast} />;
   if (view === "refer") return <ReferView onBack={back} onToast={onToast} />;
   if (view === "subscriptions") return <SubscriptionView onBack={back} onToast={onToast} onSnapshot={onSnapshot} />;
   const empty = EMPTY_PAGES[view];
@@ -66,13 +55,6 @@ export function AccountView({ s, onLanguage, onLogout, onToast, onSnapshot }: {
   return (
     <div className="mx-auto max-w-[656px] pt-1">
       <h1 className="border-b border-white/5 pb-6 text-lg font-semibold">Account</h1>
-
-      <h2 className="mt-8 text-xl font-semibold">Target language</h2>
-      <button onClick={() => setLangOpen(true)} className={`${card} mt-5 flex w-full items-center gap-3 px-5 py-4 text-left hover:border-white/20`}>
-        <Badge lang={s.language} />
-        <span className="flex-1 font-semibold">{s.language}</span>
-        <ChevronRight size={18} />
-      </button>
 
       <h2 className="mt-8 text-xl font-semibold">Account settings</h2>
       <div className="mt-5 flex flex-col gap-4">
@@ -91,24 +73,6 @@ export function AccountView({ s, onLanguage, onLogout, onToast, onSnapshot }: {
       <div className="mt-10 pb-6 text-center text-[11px] leading-5 text-white/70">
         {FOOTER.map((t) => <p key={t}>{t}</p>)}
       </div>
-
-      {langOpen && (
-        <Modal onClose={() => setLangOpen(false)} label="Target language">
-          <h2 className="text-xl font-semibold">Target language</h2>
-          <ul className="mt-4 max-h-[60vh] space-y-1 overflow-y-auto">
-            {LANGUAGES.map((l) => (
-              <li key={l}>
-                <button onClick={() => { if (l !== s.language) onLanguage(l); setLangOpen(false); }}
-                  className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left hover:bg-white/5">
-                  <Badge lang={l} />
-                  <span className="flex-1 font-semibold">{l}</span>
-                  {l === s.language && <Check size={18} className="text-indigo-400" />}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </Modal>
-      )}
     </div>
   );
 }

@@ -5,8 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   LayoutGrid, GraduationCap, BookOpen, Library, Star, TrendingUp, Gift, User, Lock, ArrowRight,
 } from "lucide-react";
-import { Modal, Select, ErrorText } from "@/components/Modal";
-import { ChatPanel } from "@/components/ChatPanel";
+import { Modal, ErrorText } from "@/components/Modal";
 import { GeneratePanel } from "@/components/GeneratePanel";
 import { PhotoPanel } from "@/components/PhotoPanel";
 import { PracticeTimer } from "@/components/PracticeTimer";
@@ -17,7 +16,7 @@ import { ExploreView } from "@/components/ExploreView";
 import { courseById, loadCourseId, saveCourseId, type Course } from "@/lib/courses";
 import { AccountView } from "@/components/account/AccountView";
 import { api, clearToken, getToken, type Progress } from "@/lib/api";
-import { LANGUAGES, LEVELS, MODES, type Mode } from "@/lib/modes";
+import { MODES, type Mode } from "@/lib/modes";
 
 const NAV = [
   { id: "home", label: "Home", icon: LayoutGrid, dot: false },
@@ -85,7 +84,7 @@ export default function Dashboard() {
   const learner = { targetLanguage: s.language, nativeLanguage: s.nativeLanguage, level: s.level };
   const clickMode = (m: Mode) => {
     if (m.premium && !s.premium) return setUpsell(m.title);
-    if (m.id === "call" || m.id === "sentence" || m.id === "word" || m.id === "dialogue" || m.id === "characters" || m.id === "roleplay" || m.id === "debate" || m.id === "flashcards" || m.id === "photo") return router.push(`/${m.id}`); // these modes are sets of pages, not modals
+    if (m.id === "chat" || m.id === "call" || m.id === "sentence" || m.id === "word" || m.id === "dialogue" || m.id === "characters" || m.id === "roleplay" || m.id === "debate" || m.id === "flashcards" || m.id === "photo") return router.push(`/${m.id}`); // these modes are sets of pages, not modals
     setOpenMode(m);
   };
   const onNav = (id: string) => { setActive(id); setOpenMode(null); };
@@ -140,13 +139,6 @@ export default function Dashboard() {
             <section>
               <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
                 <h1 className="text-lg font-semibold">Learning modes</h1>
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-xs text-white/50">My language</span>
-                  <Select label="My language" value={s.nativeLanguage} onChange={(v) => updateSettings({ nativeLanguage: v })} options={LANGUAGES} />
-                  <span className="ml-1 text-xs text-white/50">Learning</span>
-                  <Select label="Language" value={s.language} onChange={(v) => updateSettings({ language: v })} options={LANGUAGES} />
-                  <Select label="Level" value={s.level} onChange={(v) => updateSettings({ level: v })} options={LEVELS} />
-                </div>
               </div>
               <ul className="flex flex-col gap-5">
                 {MODES.map((m) => {
@@ -224,7 +216,7 @@ export default function Dashboard() {
             </aside>
           </div>
         ) : active === "account" ? (
-          <AccountView s={s} onLanguage={(language) => updateSettings({ language })} onLogout={logout} onToast={setToast} onSnapshot={setS} />
+          <AccountView s={s} onSettings={updateSettings} onLogout={logout} onToast={setToast} onSnapshot={setS} />
         ) : active === "learn" ? (
           <LearnView course={courseById(courseId)} premium={s.premium} onSelectCourse={openCourse} onLocked={setUpsell} />
         ) : active === "courses" ? (
@@ -242,9 +234,6 @@ export default function Dashboard() {
       </main>
 
       {openMode && <PracticeTimer onSnapshot={setS} />}
-      {openMode && ["chat", "call"].includes(openMode.id) && (
-        <ChatPanel mode={openMode.id as any} title={openMode.title} learner={learner} onPractice={practice} onClose={() => setOpenMode(null)} />
-      )}
       {openMode && ["sentence", "word", "dialogue", "flashcards"].includes(openMode.id) && (
         <GeneratePanel type={openMode.id as any} title={openMode.title} learner={learner} onPractice={practice} onClose={() => setOpenMode(null)} />
       )}

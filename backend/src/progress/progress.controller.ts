@@ -1,9 +1,12 @@
 import { Body, Controller, Get, Patch, Post, Req, UseGuards } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { AuthGuard } from '../auth/auth.guard';
 import { PracticeDto, SettingsDto, TimeDto } from './progress.dto';
 import { ProgressService } from './progress.service';
 
+// every page loads /progress on open and reports time every 30 s, so it needs more than the default 20 a minute
 @UseGuards(AuthGuard)
+@Throttle({ default: { limit: 120, ttl: 60_000 } })
 @Controller('progress')
 export class ProgressController {
   constructor(private readonly progress: ProgressService) {}

@@ -23,6 +23,7 @@ model User {
   debates      DebateSession[]
   characters   CharacterSession[]
   roleplays    RoleplaySession[]
+  chats        ChatSession[]
   photos       PhotoProgress[]
 
   referralCode     String?          @unique // the code in the user's invite link
@@ -190,6 +191,25 @@ model RoleplaySession {
   updatedAt    DateTime @updatedAt
 
   @@id([userId, scenarioId, language])
+}
+
+// Chat mode: every conversation with an AI tutor is a row. The newest row with archived=false is the open chat;
+// "Start a new chat" sets archived=true, and archived rows are the Chat history list.
+model ChatSession {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  language     String // the language being learned, so each language has its own chats
+  tutor        String   @default("Emma") // Emma, Kai, Nina or Niko
+  messages     Json     @default("[]") // [{ role, content }], starting with the tutor's greeting
+  reviews      Json     @default("{}") // { "<message index>": { correct, corrected, explanation, translation } }
+  translations Json     @default("{}") // { "<message index>": "text in the learner's native language" }
+  count        Int      @default(0) // messages the learner has sent
+  archived     Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([userId, language, archived])
 }
 
 // One row per user, photo and language for Photo Mode. The photo files live in frontend/public/photo.

@@ -6,6 +6,7 @@ import { AccountModule } from './account/account.module';
 import { AiModule } from './ai/ai.module';
 import { AuthModule } from './auth/auth.module';
 import { CallModule } from './call/call.module';
+import { ChatModule } from './chat/chat.module';
 import { CharactersModule } from './characters/characters.module';
 import { DebateModule } from './debate/debate.module';
 import { DialogueModule } from './dialogue/dialogue.module';
@@ -43,6 +44,7 @@ class HealthController {
     CallModule,
     CharactersModule,
     RoleplayModule,
+    ChatModule,
     PhotoModule,
   ],
   controllers: [HealthController],

@@ -8,6 +8,23 @@ export type ORMessage = { role: 'system' | 'user' | 'assistant'; content: ORCont
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/** Removes <think> blocks (closed, or still open because the output was cut off). */
+function stripThinking(text: string): string {
+  return text
+    .replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '')
+    .replace(/<think(?:ing)?>[\s\S]*$/i, '')
+    .trim();
+}
+
+/** Some models write their plan ("1. **Analyze the Request:** ...") into the answer itself. */
+function looksLikeLeakedReasoning(text: string): boolean {
+  const head = text.slice(0, 300);
+  return (
+    /^\s*(?:\d+\.\s*)?\*{0,2}\s*(analy[sz]e|deconstruct|understand|break ?down)\s+(the\s+)?(request|task|prompt|input)/i.test(head) ||
+    /\*\*\s*(analy[sz]e|deconstruct)\s+the\s+(request|task|prompt)/i.test(head)
+  );
+}
+
 @Injectable()
 export class OpenRouterService {
   private readonly log = new Logger(OpenRouterService.name);
@@ -36,14 +53,26 @@ export class OpenRouterService {
               messages,
               temperature: opts.temperature ?? 0.7,
               max_tokens: opts.maxTokens ?? 700,
+              // Chat replies do not need hidden thinking: turn it off where the model allows it,
+              // and never return it in the response.
+              reasoning: { enabled: false, exclude: true },
             }),
             signal: AbortSignal.timeout(45_000),
           });
 
           if (res.ok) {
             const data: any = await res.json();
-            const text = data?.choices?.[0]?.message?.content;
-            if (typeof text === 'string' && text.trim()) return text.trim();
+            const choice = data?.choices?.[0];
+            const raw = choice?.message?.content;
+            const text = typeof raw === 'string' ? stripThinking(raw) : '';
+            if (text) {
+              const truncated = choice?.finish_reason === 'length';
+              if (looksLikeLeakedReasoning(text) || (truncated && text.length > 0 && looksLikeLeakedReasoning(text.slice(0, 300)))) {
+                this.log.warn(`${model} returned its reasoning instead of an answer; trying the next model`);
+                break; // next model
+              }
+              return text;
+            }
             break; // empty answer: try the next model
           }
           if ([401, 402, 403].includes(res.status)) {

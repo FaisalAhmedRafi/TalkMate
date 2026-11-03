@@ -6,7 +6,6 @@ export const setToken = (t: string) => localStorage.setItem(TOKEN_KEY, t);
 export const clearToken = () => localStorage.removeItem(TOKEN_KEY);
 
 export type Msg = { role: "user" | "assistant"; content: string };
-export type ChatMode = "chat" | "call" | "roleplay" | "debate";
 export type GenerateType = "sentence" | "word" | "dialogue" | "flashcards";
 export type Learner = { targetLanguage: string; level: string; nativeLanguage?: string };
 export type Achievement = { id: string; name: string; description: string; unlocked: boolean };
@@ -97,6 +96,11 @@ export type RoleplayFeedback = { correct: boolean; corrected: string; explanatio
 export type RoleplaySaved = {
   intro: RoleplayStart; messages: Msg[]; reviews: Record<string, RoleplayFeedback>; translations: Record<string, string>;
 };
+/** A saved Chat-mode conversation: the messages plus the reviews and translations keyed by message index */
+export type ChatSaved = {
+  id: string; tutor: string; messages: Msg[]; reviews: Record<string, RoleplayFeedback>; translations: Record<string, string>;
+};
+export type ChatHistoryItem = { id: string; tutor: string; title: string; count: number; updatedAt: string };
 export type FlashStatus = "new" | "learning" | "known";
 export type FlashCard = {
   topicId: string; index: number; term: string; translation: string; example: string; exampleTranslation: string;
@@ -289,8 +293,26 @@ export const api = {
       request<{ ok: boolean }>("DELETE", `/roleplay/session?scenarioId=${encodeURIComponent(scenarioId)}`),
     translate: (b: Learner & { text: string }) => post<{ translation: string }>("/roleplay/translate", b),
   },
-  chat: (b: Learner & { mode: ChatMode; messages: Msg[]; context?: Record<string, string> }) =>
-    post<{ reply: string }>("/ai/chat", b),
+  chat: {
+    /** The tutor's greeting for a new chat */
+    start: (b: Learner & { tutor: string }) => post<{ opening: string }>("/chat/start", b),
+    /** The tutor's answer; messages start with the greeting and end with the learner's new message */
+    reply: (b: Learner & { tutor: string; messages: Msg[] }) => post<{ reply: string }>("/chat/reply", b),
+    /** Three tappable replies for the suggestion bar; messages end with the tutor's message */
+    suggestions: (b: Learner & { tutor: string; messages: Msg[] }) => post<{ suggestions: string[] }>("/chat/suggestions", b),
+    feedback: (b: Learner & { message: string }) => post<RoleplayFeedback>("/chat/feedback", b),
+    translate: (b: Learner & { text: string }) => post<{ translation: string }>("/chat/translate", b),
+    /** The open chat for the current target language, or null */
+    session: () => request<{ session: ChatSaved | null }>("GET", "/chat/session"),
+    save: (b: { tutor: string; messages: Msg[]; reviews: Record<string, RoleplayFeedback>; translations: Record<string, string> }) =>
+      request<{ ok: boolean }>("PUT", "/chat/session", b),
+    /** "Start a new chat": the open chat moves to the history */
+    archive: () => post<{ ok: boolean }>("/chat/archive"),
+    history: () => request<{ chats: ChatHistoryItem[] }>("GET", "/chat/history"),
+    /** Opens a chat from the history (the open chat moves to the history) */
+    open: (id: string) => post<{ session: ChatSaved }>(`/chat/history/${encodeURIComponent(id)}/open`),
+    remove: (id: string) => request<{ ok: boolean }>("DELETE", `/chat/history/${encodeURIComponent(id)}`),
+  },
   generate: (b: Learner & { type: GenerateType; topic: string; count?: number }) => post<any>("/ai/generate", b),
   photo: (b: Learner & { image: string; description?: string }) => post<{ feedback: string }>("/ai/photo", b),
   feedback: (b: Learner & { texts: string[] }) => post<{ feedback: string }>("/ai/feedback", b),

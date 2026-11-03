@@ -110,8 +110,10 @@ export default function DebatePracticePage() {
       for (const [k, r] of Object.entries(reviews)) if (r.state === "done") rv[k] = r.data;
       const tv: Record<string, string> = {};
       for (const [k, v] of Object.entries(tr)) if (v.text) tv[k] = v.text;
-      api.debate.save({ topicId, side, messages: msgs, reviews: rv, translations: tv }).catch(() => {}); // best effort, like Word Mode
-    }, 800);
+      api.debate
+      .save({ topicId, side, messages: msgs, reviews: rv, translations: tv })
+      .catch((e) => console.error("Debate save failed:", e)); // was: .catch(() => {})
+        }, 800);
     return () => clearTimeout(t);
   }, [intro, side, busy, msgs, reviews, tr, topicId]);
 
