@@ -1,22 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { Building2, CalendarCheck, Gift, LifeBuoy, LogOut, Settings, SlidersHorizontal, User, type LucideIcon } from "lucide-react";
+import { CalendarCheck, Gift, LifeBuoy, LogOut, Settings, SlidersHorizontal, User, type LucideIcon } from "lucide-react";
 import type { Progress } from "@/lib/api";
 import { PersonalizationView } from "./PersonalizationView";
+import { ProfileView } from "./ProfileView";
 import { ReferView } from "./ReferView";
 import { SettingsView } from "./SettingsView";
-import { SubPage } from "./SubPage";
+import { SupportView } from "./SupportView";
 import { SubscriptionView } from "./SubscriptionView";
 
-type View = "menu" | "personalization" | "subscriptions" | "refer" | "profile" | "settings" | "organizations" | "support";
-
-// Sections that are not built yet
-const EMPTY_PAGES: Partial<Record<View, { title: string; subtitle: string }>> = {
-  profile: { title: "Profile", subtitle: "Manage your profile details." },
-  organizations: { title: "For organizations", subtitle: "Partnerships with TalkMate." },
-  support: { title: "Support", subtitle: "Help center and contact." },
-};
+type View = "menu" | "personalization" | "subscriptions" | "refer" | "profile" | "settings" | "support";
 
 const FOOTER = [
   "Privacy Policy", "Terms and Conditions", "End User License Agreement",
@@ -47,10 +41,10 @@ export function AccountView({ s, onSettings, onLogout, onToast, onSnapshot }: {
 
   if (view === "personalization") return <PersonalizationView onBack={back} onToast={onToast} />;
   if (view === "settings") return <SettingsView s={s} onBack={back} onSettings={onSettings} onToast={onToast} />;
+  if (view === "profile") return <ProfileView onBack={back} onToast={onToast} onSnapshot={onSnapshot} onLogout={onLogout} />;
+  if (view === "support") return <SupportView onBack={back} onToast={onToast} />;
   if (view === "refer") return <ReferView onBack={back} onToast={onToast} />;
   if (view === "subscriptions") return <SubscriptionView onBack={back} onToast={onToast} onSnapshot={onSnapshot} />;
-  const empty = EMPTY_PAGES[view];
-  if (empty) return <SubPage title={empty.title} subtitle={empty.subtitle} onBack={back}><p className="text-white/60">This section isn't built yet.</p></SubPage>;
 
   return (
     <div className="mx-auto max-w-[656px] pt-1">
@@ -64,8 +58,7 @@ export function AccountView({ s, onSettings, onLogout, onToast, onSnapshot }: {
           <Row icon={Settings} title="Settings" sub="Manage your account settings." onClick={() => setView("settings")} />
           <Row icon={CalendarCheck} title="Subscriptions" sub="Manage your subscriptions." onClick={() => setView("subscriptions")} />
           <Row icon={Gift} title="Refer a friend" sub="Get 1 month Premium for free." onClick={() => setView("refer")} />
-          <Row icon={Building2} title="For organizations" sub="Partnerships with TalkMate." onClick={() => setView("organizations")} />
-          <Row icon={LifeBuoy} title="Support" sub="Help center and contact." onClick={() => setView("support")} />
+          <Row icon={LifeBuoy} title="Support" sub="Contact our support team." onClick={() => setView("support")} />
           <Row icon={LogOut} title="Log out" sub="Log out from this profile." onClick={onLogout} danger />
         </div>
       </div>

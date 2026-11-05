@@ -23,3 +23,6 @@ export const QUESTIONS = [
 ];
 
 export const optionsFor = (key: string) => QUESTIONS.find((q) => q.key === key)!.options;
+
+/** The "Type of issue" choices on Support > Contact us. */
+export const SUPPORT_TYPES = ['Account or login', 'Subscription or billing', 'Bug or technical problem', 'Feedback or suggestion', 'Other'];

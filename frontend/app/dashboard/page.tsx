@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  LayoutGrid, GraduationCap, BookOpen, Library, Star, TrendingUp, Gift, User, Lock, ArrowRight, Sparkle,
+  LayoutGrid, GraduationCap, BookOpen, Library, Star, TrendingUp, User, Lock, ArrowRight, Sparkle,
 } from "lucide-react";
 import { Modal, ErrorText } from "@/components/Modal";
 import { GeneratePanel } from "@/components/GeneratePanel";
@@ -37,7 +37,7 @@ const TIERS = [
   { min: 15, name: "Platinum", ring: "from-cyan-200 to-sky-500" },
 ];
 const EMPTY: Progress = {
-  email: "", xp: 0, streak: 0, longest: 0, messages: 0, premium: false, giftClaimed: false,
+  email: "", name: null, xp: 0, streak: 0, longest: 0, messages: 0, premium: false,
   language: "Spanish", nativeLanguage: "English", level: "Beginner", today: [],
 };
 
@@ -81,12 +81,9 @@ export default function Dashboard() {
     api.progress.premium()
       .then((p) => { setS(p); setUpsell(null); setToast("Premium unlocked (demo)"); })
       .catch(fail);
-  const claimGift = () => {
-    if (s.giftClaimed) return setToast("Gift already claimed");
-    api.progress.gift().then((p) => { setS(p); setToast("Gift claimed: +20 XP"); }).catch(fail);
-  };
   const logout = () => { clearToken(); router.replace("/login"); };
 
+  const displayName = s.name?.trim() || s.email.split("@")[0] || "Account";
   const level = Math.floor(s.xp / XP_PER_LEVEL) + 1;
   const progress = (s.xp % XP_PER_LEVEL) / XP_PER_LEVEL;
   const tier = [...TIERS].reverse().find((t) => level >= t.min) ?? TIERS[0];
@@ -128,20 +125,18 @@ export default function Dashboard() {
             </button>
           ))}
         </nav>
-        <div className="flex flex-col gap-1">
-          <button
-            onClick={claimGift}
-            className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-white/55 transition hover:bg-white/[0.04] hover:text-pink-300">
-            <Gift size={18} className="text-pink-300" /> A gift for you
-          </button>
-          <button onClick={() => setActive("account")}
-            className={`flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-colors ${active === "account" ? "bg-violet-600/15 text-violet-300" : "text-white/55 hover:bg-white/[0.04] hover:text-white"}`}>
-            <User size={18} /> Account
-          </button>
-        </div>
+        {/* empty spacer keeps the nav vertically centred between the logo and the bottom */}
+        <div aria-hidden />
       </aside>
 
-      <main className="w-full px-4 py-7 md:pl-[260px] md:pr-8 lg:px-10 lg:py-9 lg:pl-[260px]">
+      {/* account button: top-right corner, shows the user's name and an icon */}
+      <button onClick={() => onNav("account")} aria-label="Account"
+        className={`fixed right-4 top-4 z-20 flex max-w-[220px] items-center gap-2.5 rounded-full border py-1.5 pl-1.5 pr-4 text-sm font-medium backdrop-blur transition-colors lg:right-8 lg:top-6 ${active === "account" ? "border-violet-500/30 bg-violet-600/20 text-violet-200" : "border-white/10 bg-[#171827]/90 text-white/80 hover:bg-white/[0.08] hover:text-white"}`}>
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-violet-500/25 text-violet-200"><User size={16} /></span>
+        <span className="truncate">{displayName}</span>
+      </button>
+
+      <main className="w-full px-4 pb-7 pt-20 md:pl-[260px] md:pr-8 lg:px-10 lg:pb-9 lg:pt-24 lg:pl-[260px]">
         {active === "home" ? (
           <div className="mx-auto max-w-[1500px]">
             <div className="mb-7">

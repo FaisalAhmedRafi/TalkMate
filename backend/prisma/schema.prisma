@@ -10,8 +10,18 @@ datasource db {
 model User {
   id           String             @id @default(cuid())
   email        String             @unique
-  name         String?
+  name         String? // first name
+  lastName     String?
+  avatar       String? // small square profile picture as a data URL (resized in the browser)
+  timeZone     String             @default("UTC+00:00")
   passwordHash String
+  // Profile > Email / App notifications and Privacy preferences
+  emailSpecialOffers Boolean @default(true)
+  emailLearning      Boolean @default(true)
+  appSpecialOffers   Boolean @default(true)
+  appLearning        Boolean @default(true)
+  optOutAiTraining   Boolean @default(false)
+  optOutProfiling    Boolean @default(false)
   createdAt    DateTime           @default(now())
   progress     Progress?
   entries      PracticeEntry[]
@@ -34,6 +44,7 @@ model User {
   referralRewarded Boolean          @default(false) // the free months for this user's referral were paid out
   personalization  Personalization?
   subscription     Subscription?
+  supportMessages  SupportMessage[]
 }
 
 model Progress {
@@ -45,7 +56,6 @@ model Progress {
   messages       Int      @default(0)
   lastDay        String? // UTC date, YYYY-MM-DD
   premium        Boolean  @default(false)
-  giftClaimed    Boolean  @default(false)
   language       String   @default("Spanish")
   level          String   @default("Beginner")
   nativeLanguage String   @default("English") // what translations and feedback are written in
@@ -246,4 +256,17 @@ model PhotoProgress {
   updatedAt DateTime @updatedAt
 
   @@id([userId, photoId, language])
+}
+
+/// A message sent from Account > Support > Contact us (read it in the database or Prisma Studio; no email is sent yet)
+model SupportMessage {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  email     String // the user's account email when they wrote, so replies still work after an email change
+  type      String // one of SUPPORT_TYPES in account.options.ts
+  message   String
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
 }

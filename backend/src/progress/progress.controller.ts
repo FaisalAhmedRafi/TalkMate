@@ -17,5 +17,4 @@ export class ProgressController {
   @Post('practice') practice(@Req() req: any, @Body() dto: PracticeDto) { return this.progress.practice(req.user.id, dto.text); }
   @Patch('settings') settings(@Req() req: any, @Body() dto: SettingsDto) { return this.progress.settings(req.user.id, dto); }
   @Post('premium') premium(@Req() req: any) { return this.progress.unlockPremium(req.user.id); }
-  @Post('gift') gift(@Req() req: any) { return this.progress.claimGift(req.user.id); }
 }

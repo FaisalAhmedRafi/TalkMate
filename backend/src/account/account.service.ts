@@ -2,7 +2,8 @@ import { BadRequestException, Injectable, ServiceUnavailableException } from '@n
 import { Subscription } from '@prisma/client';
 import { randomInt } from 'crypto';
 import { PrismaService } from '../prisma/prisma.module';
-import { PersonalizationDto } from './account.dto';
+import * as bcrypt from 'bcryptjs';
+import { NotificationsDto, PasswordDto, PersonalizationDto, PrivacyDto, ProfileDto, SupportDto } from './account.dto';
 import { QUESTIONS } from './account.options';
 import { nextPayment, syncPremium } from './subscription.util';
 
@@ -50,6 +51,70 @@ export class AccountService {
       update: { ...dto },
     });
     return this.personalization(userId);
+  }
+
+  // ---- Profile ----
+  /** Everything the Profile pages show: personal details, notification switches and privacy switches. */
+  async profile(userId: string) {
+    const u = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    return {
+      email: u.email, firstName: u.name ?? '', lastName: u.lastName ?? '', timeZone: u.timeZone, avatar: u.avatar,
+      notifications: {
+        emailSpecialOffers: u.emailSpecialOffers, emailLearning: u.emailLearning,
+        appSpecialOffers: u.appSpecialOffers, appLearning: u.appLearning,
+      },
+      privacy: { optOutAiTraining: u.optOutAiTraining, optOutProfiling: u.optOutProfiling },
+    };
+  }
+
+  async saveProfile(userId: string, dto: ProfileDto) {
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        name: dto.firstName === undefined ? undefined : dto.firstName.trim() || null,
+        lastName: dto.lastName === undefined ? undefined : dto.lastName.trim() || null,
+        timeZone: dto.timeZone,
+      },
+    });
+    return this.profile(userId);
+  }
+
+  async saveAvatar(userId: string, image: string | null) {
+    await this.prisma.user.update({ where: { id: userId }, data: { avatar: image } });
+    return this.profile(userId);
+  }
+
+  async changePassword(userId: string, dto: PasswordDto) {
+    const u = await this.prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { passwordHash: true } });
+    // 400, not 401: the frontend logs the user out on a 401
+    if (!(await bcrypt.compare(dto.currentPassword, u.passwordHash))) throw new BadRequestException('Your current password is incorrect.');
+    if (dto.currentPassword === dto.newPassword) throw new BadRequestException('Choose a password that is different from your current one.');
+    await this.prisma.user.update({ where: { id: userId }, data: { passwordHash: await bcrypt.hash(dto.newPassword, 10) } });
+    return { ok: true };
+  }
+
+  async saveNotifications(userId: string, dto: NotificationsDto) {
+    await this.prisma.user.update({ where: { id: userId }, data: { ...dto } });
+    return this.profile(userId);
+  }
+
+  async savePrivacy(userId: string, dto: PrivacyDto) {
+    await this.prisma.user.update({ where: { id: userId }, data: { ...dto } });
+    return this.profile(userId);
+  }
+
+  async sendSupport(userId: string, dto: SupportDto) {
+    const message = dto.message.trim();
+    if (!message) throw new BadRequestException('Please describe your issue or feedback.');
+    const { email } = await this.prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { email: true } });
+    await this.prisma.supportMessage.create({ data: { userId, email, type: dto.type, message } });
+    return { ok: true };
+  }
+
+  /** Permanent. Every table that belongs to the user is removed by the cascade rules in the schema. */
+  async deleteAccount(userId: string) {
+    await this.prisma.user.delete({ where: { id: userId } });
+    return { ok: true };
   }
 
   // ---- Refer a friend ----

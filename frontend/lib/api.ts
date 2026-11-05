@@ -120,14 +120,20 @@ export type PersonalizationData = {
   values: Record<string, string | null>;
   questions: { key: string; label: string; options: string[] }[];
 };
+export type NotificationPrefs = { emailSpecialOffers: boolean; emailLearning: boolean; appSpecialOffers: boolean; appLearning: boolean };
+export type PrivacyPrefs = { optOutAiTraining: boolean; optOutProfiling: boolean };
+export type ProfileData = {
+  email: string; firstName: string; lastName: string; timeZone: string; avatar: string | null;
+  notifications: NotificationPrefs; privacy: PrivacyPrefs;
+};
 export type Referral = { code: string; invited: number; rewarded: number };
 export type SubscriptionInfo = {
   status: "none" | "active" | "paused" | "canceled"; months: number | null;
   nextPayment: string | null; accessUntil: string | null; premium: boolean;
 };
 export type Progress = {
-  email: string; xp: number; streak: number; longest: number; messages: number;
-  premium: boolean; giftClaimed: boolean; language: string; nativeLanguage: string; level: string; today: string[];
+  email: string; name: string | null; xp: number; streak: number; longest: number; messages: number;
+  premium: boolean; language: string; nativeLanguage: string; level: string; today: string[];
 };
 
 async function request<T>(method: string, path: string, body?: unknown, keepalive = false): Promise<T> {
@@ -167,13 +173,21 @@ export const api = {
     practice: (text: string) => post<Progress>("/progress/practice", { text }),
     settings: (b: { language?: string; nativeLanguage?: string; level?: string }) => request<Progress>("PATCH", "/progress/settings", b),
     premium: () => post<Progress>("/progress/premium"),
-    gift: () => post<Progress>("/progress/gift"),
     stats: () => request<Stats>("GET", "/progress/stats"),
     time: (seconds: number, day: string, keepalive = false) => post<Progress>("/progress/time", { seconds, day }, keepalive),
   },
   account: {
     personalization: () => request<PersonalizationData>("GET", "/account/personalization"),
     savePersonalization: (b: Record<string, string>) => request<PersonalizationData>("PATCH", "/account/personalization", b),
+    profile: () => request<ProfileData>("GET", "/account/profile"),
+    saveProfile: (b: { firstName?: string; lastName?: string; timeZone?: string }) => request<ProfileData>("PATCH", "/account/profile", b),
+    saveAvatar: (image: string) => request<ProfileData>("PATCH", "/account/avatar", { image }),
+    removeAvatar: () => request<ProfileData>("DELETE", "/account/avatar"),
+    changePassword: (b: { currentPassword: string; newPassword: string }) => post<{ ok: true }>("/account/password", b),
+    saveNotifications: (b: Partial<NotificationPrefs>) => request<ProfileData>("PATCH", "/account/notifications", b),
+    savePrivacy: (b: Partial<PrivacyPrefs>) => request<ProfileData>("PATCH", "/account/privacy", b),
+    sendSupport: (b: { type: string; message: string }) => post<{ ok: true }>("/account/support", b),
+    deleteAccount: () => request<{ ok: true }>("DELETE", "/account"),
     referral: () => request<Referral>("GET", "/account/referral"),
     subscription: () => request<SubscriptionInfo>("GET", "/account/subscription"),
     changePlan: (months: number) => post<SubscriptionInfo>("/account/subscription/plan", { months }),

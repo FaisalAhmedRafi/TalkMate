@@ -33,16 +33,16 @@ export class ProgressService {
     await syncPremium(this.prisma, userId); // a cancelled plan that has run out stops being Premium
     const [p, user, entries] = await Promise.all([
       this.ensure(userId),
-      this.prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { email: true } }),
+      this.prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { email: true, name: true, lastName: true } }),
       this.prisma.practiceEntry.findMany({
         where: { userId, day: today }, orderBy: { createdAt: 'desc' }, take: 30,
       }),
     ]);
     const lapsed = p.lastDay ? daysBetween(p.lastDay, today) > 1 : false;
     return {
-      email: user.email,
+      email: user.email, name: [user.name, user.lastName].filter(Boolean).join(' ') || null,
       xp: p.xp, streak: lapsed ? 0 : p.streak, longest: p.longest, messages: p.messages,
-      premium: p.premium, giftClaimed: p.giftClaimed, language: p.language, nativeLanguage: p.nativeLanguage, level: p.level,
+      premium: p.premium, language: p.language, nativeLanguage: p.nativeLanguage, level: p.level,
       today: entries.reverse().map((e) => e.text),
     };
   }
@@ -115,14 +115,6 @@ export class ProgressService {
   async unlockPremium(userId: string) {
     await this.ensure(userId);
     await startSubscription(this.prisma, userId);
-    return this.snapshot(userId);
-  }
-
-  async claimGift(userId: string) {
-    const p = await this.ensure(userId);
-    if (!p.giftClaimed) {
-      await this.prisma.progress.update({ where: { userId }, data: { giftClaimed: true, xp: { increment: 20 } } });
-    }
     return this.snapshot(userId);
   }
 }
