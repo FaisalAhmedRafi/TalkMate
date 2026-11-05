@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  LayoutGrid, GraduationCap, BookOpen, Library, Star, TrendingUp, Gift, User, Lock, ArrowRight,
+  LayoutGrid, GraduationCap, BookOpen, Library, Star, TrendingUp, Gift, User, Lock, ArrowRight, Sparkle,
 } from "lucide-react";
 import { Modal, ErrorText } from "@/components/Modal";
 import { GeneratePanel } from "@/components/GeneratePanel";
@@ -28,6 +28,14 @@ const NAV = [
 const TABS = ["learn", "courses", "explore", "progress"]; // sections that can be opened with /dashboard?tab=...
 
 const XP_PER_LEVEL = 50;
+// level tiers shown on the Level card (the medal colour and name change as the level grows)
+const TIERS = [
+  { min: 1, name: "Starter", ring: "from-zinc-300 to-zinc-600" },
+  { min: 3, name: "Bronze", ring: "from-orange-300 to-orange-700" },
+  { min: 6, name: "Silver", ring: "from-slate-200 to-slate-500" },
+  { min: 10, name: "Gold", ring: "from-yellow-200 to-yellow-600" },
+  { min: 15, name: "Platinum", ring: "from-cyan-200 to-sky-500" },
+];
 const EMPTY: Progress = {
   email: "", xp: 0, streak: 0, longest: 0, messages: 0, premium: false, giftClaimed: false,
   language: "Spanish", nativeLanguage: "English", level: "Beginner", today: [],
@@ -81,6 +89,7 @@ export default function Dashboard() {
 
   const level = Math.floor(s.xp / XP_PER_LEVEL) + 1;
   const progress = (s.xp % XP_PER_LEVEL) / XP_PER_LEVEL;
+  const tier = [...TIERS].reverse().find((t) => level >= t.min) ?? TIERS[0];
   const learner = { targetLanguage: s.language, nativeLanguage: s.nativeLanguage, level: s.level };
   const clickMode = (m: Mode) => {
     if (m.premium && !s.premium) return setUpsell(m.title);
@@ -93,7 +102,7 @@ export default function Dashboard() {
 
   if (!loaded) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-[#16161c] text-white/70">
+      <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-[#0D0E17] text-white/70">
         <p>{loadError ?? "Loading…"}</p>
         {loadError && <button onClick={() => location.reload()} className="rounded-full bg-white/10 px-4 py-2 text-sm text-white">Try again</button>}
       </div>
@@ -101,19 +110,19 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="flex min-h-screen bg-[#16161c] text-white">
-      <aside className="fixed inset-y-0 left-0 z-10 hidden w-[236px] flex-col justify-between border-r border-white/5 bg-[#16161c] px-6 py-6 md:flex">
+    <div className="flex min-h-screen bg-[#0D0E17] text-white">
+      <aside className="fixed inset-y-0 left-0 z-10 hidden w-[236px] flex-col justify-between border-r border-white/[0.07] bg-[#11121D] px-6 py-7 md:flex">
         <button onClick={() => { setActive("home"); setOpenMode(null); router.push("/dashboard"); }} aria-label="TalkMate home"
           className="flex items-center gap-2 rounded-lg text-left transition-opacity hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500">
           <svg width="32" height="32" viewBox="0 0 32 32" fill="none" aria-hidden="true">
-            <path d="M6 8l8 8-8 8M16 8l8 8-8 8" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M6 8l8 8-8 8M16 8l8 8-8 8" stroke="#A78BFA" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
-          <span className="text-lg font-bold tracking-tight">TalkMate</span>
+          <span className="text-lg font-bold tracking-tight text-white">TalkMate</span>
         </button>
         <nav className="flex flex-col gap-1">
           {NAV.map(({ id, label, icon: Icon, dot }) => (
             <button key={id} onClick={() => onNav(id)}
-              className={`relative flex items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-semibold transition-colors ${active === id ? "bg-white/10" : "text-white/80 hover:bg-white/5"}`}>
+              className={`relative flex items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-medium transition-all duration-200 ${active === id ? "bg-violet-600/15 text-violet-300 ring-1 ring-violet-500/20" : "text-white/55 hover:bg-white/[0.04] hover:text-white"}`}>
               <Icon size={18} />
               {label}
               {dot && <span className="absolute left-[34px] top-2 h-2 w-2 rounded-full bg-pink-500" />}
@@ -123,43 +132,42 @@ export default function Dashboard() {
         <div className="flex flex-col gap-1">
           <button
             onClick={claimGift}
-            className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold text-white/80 hover:bg-white/5">
-            <Gift size={18} className="text-pink-400" /> A gift for you
+            className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-white/55 transition hover:bg-white/[0.04] hover:text-pink-300">
+            <Gift size={18} className="text-pink-300" /> A gift for you
           </button>
           <button onClick={() => setActive("account")}
-            className={`flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition-colors ${active === "account" ? "bg-white/10" : "text-white/80 hover:bg-white/5"}`}>
+            className={`flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-colors ${active === "account" ? "bg-violet-600/15 text-violet-300" : "text-white/55 hover:bg-white/[0.04] hover:text-white"}`}>
             <User size={18} /> Account
           </button>
         </div>
       </aside>
 
-      <main className="w-full px-4 py-10 md:pl-[236px]">
+      <main className="w-full px-4 py-7 md:pl-[260px] md:pr-8 lg:px-10 lg:py-9 lg:pl-[260px]">
         {active === "home" ? (
-          <div className="mx-auto grid max-w-[1036px] gap-6 lg:grid-cols-[687px_324px] lg:justify-center">
+          <div className="mx-auto grid max-w-[1500px] gap-8 xl:grid-cols-[minmax(0,1fr)_320px]">
             <section>
-              <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-                <h1 className="text-lg font-semibold">Learning modes</h1>
+              <div className="mb-7">
+                <p className="mb-2 text-xs font-semibold tracking-[0.18em] text-violet-300">YOUR LEARNING SPACE</p>
+                <h1 className="mb-2 text-3xl font-bold tracking-tight">Learning modes</h1>
+                <p className="text-sm text-white/45">Choose how you want to practice today.</p>
               </div>
-              <ul className="flex flex-col gap-5">
+              <ul className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-3">
                 {MODES.map((m) => {
                   const locked = m.premium && !s.premium;
                   return (
-                    <li key={m.id} className="relative">
-                      {locked && (
-                        <span className="absolute right-3 top-[-10px] z-[1] flex items-center gap-1 rounded-full bg-[#16161c] px-2 py-1 text-[11px] font-bold">
-                          <span className="flex h-4 w-4 items-center justify-center rounded-full bg-pink-500"><Lock size={9} /></span>
-                          Premium
-                        </span>
-                      )}
-                      <button onClick={() => clickMode(m)}
-                        className="flex h-[144px] w-full overflow-hidden rounded-2xl border border-white/5 bg-[#1f1f27] text-left transition-colors hover:border-white/20">
-                        <div className={`flex w-[142px] shrink-0 items-center justify-center text-5xl ${m.id === "chat" ? "bg-yellow-300" : "bg-zinc-800"} ${locked ? "grayscale" : ""}`}>
-                          {m.emoji}
+                    <li key={m.id}>
+                      <button onClick={() => clickMode(m)} className="group block w-full rounded-2xl border border-white/[0.07] bg-[#171827] p-3 text-left transition-all duration-300 hover:-translate-y-1 hover:border-violet-400/30 hover:bg-[#1C1D31] hover:shadow-[0_10px_35px_rgba(124,92,255,0.08)] sm:p-4">
+                        <div className="relative aspect-[7/4] w-full overflow-hidden rounded-xl ring-1 ring-white/[0.04] transition group-hover:ring-violet-400/20">
+                          <ModeImage mode={m} locked={locked} />
+                          {locked && (
+                            <span className="absolute right-3 top-3 flex items-center gap-1.5 rounded-full bg-[#11121D]/85 py-1 pl-1 pr-2.5 text-xs font-bold backdrop-blur">
+                              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-violet-500"><Lock size={11} /></span>
+                              Premium
+                            </span>
+                          )}
                         </div>
-                        <div className="flex flex-col justify-center px-4">
-                          <h2 className="text-xl font-semibold">{m.title}</h2>
-                          <p className="mt-2 text-[13px] text-white/80">{m.desc}</p>
-                        </div>
+                        <h2 className="mt-3 text-sm font-semibold transition-colors group-hover:text-violet-300">{m.title}</h2>
+                        <p className="mt-2 text-xs leading-relaxed text-white/45">{m.desc}</p>
                       </button>
                     </li>
                   );
@@ -167,48 +175,70 @@ export default function Dashboard() {
               </ul>
             </section>
 
-            <aside className="flex flex-col gap-4 lg:mt-[60px] lg:self-start">
+            <aside className="flex flex-col gap-5 lg:self-start">
               {!s.premium && (
-                <div className="rounded-2xl bg-gradient-to-br from-pink-500 to-rose-500 p-4">
-                  <span className="inline-flex items-center gap-1 rounded-full bg-white/20 px-2 py-1 text-[11px] font-bold">
-                    <Star size={11} fill="white" /> Premium
+                <div className="relative overflow-hidden rounded-2xl border border-violet-400/15 bg-gradient-to-br from-[#30205B] via-[#211B3D] to-[#191827] p-6">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-violet-400/15 py-1.5 pl-1.5 pr-2.5 text-xs font-bold text-violet-200">
+                    <Star size={12} fill="white" /> Premium
                   </span>
-                  <h3 className="mt-3 text-xl font-semibold">Special offer: up to 79% off!</h3>
-                  <p className="mt-1 text-[11px] font-semibold">For a limited time TalkMate Premium is on sale.</p>
-                  <button onClick={() => setUpsell("Premium")} className="mt-4 rounded-full bg-white px-4 py-2 text-xs font-semibold text-black">Get premium</button>
+                  <h3 className="mt-4 text-xl font-bold">Special offer: up to 79% off!</h3>
+                  <p className="mt-2 text-xs leading-relaxed text-white/55">For a limited time TalkMate Premium is on sale.</p>
+                  <button onClick={() => setUpsell("Premium")} className="mt-5 rounded-xl bg-violet-500 px-5 py-3 text-sm font-semibold text-white transition hover:bg-violet-400">Get premium</button>
                 </div>
               )}
 
-              <div className="rounded-2xl border border-white/5 bg-[#1f1f27] p-6">
-                <h3 className="text-xl font-semibold">Level {level}</h3>
-                <p className="mt-3 text-sm text-white/70">Your current level.</p>
-                <div className="mt-6 flex items-center gap-3 rounded-xl bg-white/5 px-4 py-3">
-                  <span className="font-semibold">{level}</span>
-                  <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/15">
-                    <div className="h-full rounded-full bg-indigo-500 transition-all" style={{ width: `${progress * 100}%` }} />
+              {!s.premium && (
+                <button onClick={() => onNav("account")}
+                  className="flex items-center gap-5 rounded-2xl border border-white/[0.07] bg-[#171827] p-5 text-left transition-opacity hover:opacity-90">
+                  <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-violet-500/15 ring-4 ring-violet-400/10">
+                    <Star size={26} fill="white" />
+                  </span>
+                  <span>
+                    <span className="block text-base font-semibold">Get free Premium</span>
+                    <span className="mt-1 block text-xs leading-relaxed text-white/45">Invite friends and get free premium subscription.</span>
+                  </span>
+                </button>
+              )}
+
+              <div className="rounded-2xl border border-white/[0.07] bg-[#171827] p-6">
+                <div className="flex items-center gap-4">
+                  <span className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-gradient-to-br ${tier.ring} p-[5px]`}>
+                    <span className="flex h-full w-full items-center justify-center rounded-full bg-[#171827]"><Sparkle size={22} fill="white" /></span>
+                  </span>
+                  <div>
+                    <h3 className="text-xl font-semibold">Level {level}</h3>
+                    <p className="mt-0.5 text-lg text-white/70">{tier.name}</p>
                   </div>
-                  <span className="text-white/40">{level + 1}</span>
+                </div>
+                <div className="mt-5 flex items-center gap-3">
+                  <div className="h-5 flex-1 overflow-hidden rounded-full bg-white/[0.08]">
+                    <div className="flex h-full min-w-[3rem] items-center justify-center rounded-full bg-violet-500 text-[11px] font-bold transition-all"
+                      style={{ width: `${Math.round(progress * 100)}%` }}>
+                      {Math.round(progress * 100)}%
+                    </div>
+                  </div>
+                  <span className="font-semibold text-violet-300">{level + 1}</span>
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-white/5 bg-[#1f1f27] px-6">
+              <div className="rounded-2xl border border-white/[0.07] bg-[#171827] px-6">
                 <div className="flex items-center justify-between py-6">
-                  <span className="text-lg font-semibold">Ongoing streak</span>
-                  <span className="rounded-full bg-indigo-700 px-3 py-3 text-sm font-semibold">{s.streak} {s.streak === 1 ? "day" : "days"}</span>
+                  <span className="text-xl font-semibold">Ongoing streak</span>
+                  <span className="rounded-full bg-violet-500/15 px-4 py-2.5 text-sm font-semibold text-violet-300">{s.streak} {s.streak === 1 ? "day" : "days"}</span>
                 </div>
-                <div className="flex items-center justify-between border-t border-white/5 py-5">
-                  <span className="text-lg font-semibold">Longest streak</span>
-                  <span className="rounded-full bg-white/10 px-3 py-3 text-sm font-semibold">{s.longest} {s.longest === 1 ? "day" : "days"}</span>
+                <div className="flex items-center justify-between border-t border-white/5 py-6">
+                  <span className="text-xl font-semibold">Longest streak</span>
+                  <span className="rounded-full bg-white/[0.06] px-4 py-2.5 text-sm font-semibold text-white/70">{s.longest} {s.longest === 1 ? "day" : "days"}</span>
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-white/5 bg-[#1f1f27] p-6">
+              <div className="rounded-2xl border border-white/[0.07] bg-[#171827] p-6">
                 <h3 className="text-xl font-semibold">Daily feedback</h3>
                 <p className="mt-3 text-sm text-white/60">Practice in AI modes and receive personalized daily feedback.</p>
                 <div className="mt-6 flex items-center justify-between">
                   <span className="text-xs font-semibold">See your daily practice feedbacks here</span>
                   <button onClick={() => setFeedbackOpen(true)} aria-label="Open daily feedback"
-                    className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-600 hover:bg-indigo-500">
+                    className="flex h-10 w-10 items-center justify-center rounded-full bg-violet-500 hover:bg-violet-400">
                     <ArrowRight size={18} />
                   </button>
                 </div>
@@ -246,16 +276,30 @@ export default function Dashboard() {
           <h2 className="text-xl font-semibold">{upsell === "Premium" ? "Get TalkMate Premium" : `${upsell} is a Premium mode`}</h2>
           <p className="mt-2 text-sm text-white/70">Unlock all 10 learning modes. Billing isn't connected in this clone, so this button unlocks everything for testing.</p>
           <button onClick={unlockPremium}
-            className="mt-6 w-full rounded-full bg-pink-500 py-3 text-sm font-semibold hover:bg-pink-400">
+            className="mt-6 w-full rounded-xl bg-violet-500 py-3 text-sm font-semibold hover:bg-violet-400">
             Unlock all modes (demo)
           </button>
         </Modal>
       )}
 
       {toast && (
-        <div role="status" className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full bg-white px-5 py-3 text-sm font-semibold text-black shadow-lg">{toast}</div>
+        <div role="status" className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full border border-white/10 bg-[#222336] px-5 py-3 text-sm font-semibold text-white shadow-2xl">{toast}</div>
       )}
     </div>
+  );
+}
+
+// Picture for a mode card: your own file from /public/modes. Falls back to the emoji if the file is missing.
+function ModeImage({ mode, locked }: { mode: Mode; locked: boolean }) {
+  const [failed, setFailed] = useState(false);
+  const bg = mode.id === "chat" ? "bg-[#F4E7D2]" : "bg-[#25263B]";
+  if (failed) {
+    return <div className={`flex h-full w-full items-center justify-center text-6xl ${bg} ${locked ? "grayscale" : ""}`}>{mode.emoji}</div>;
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={mode.image} alt={mode.title} onError={() => setFailed(true)} draggable={false}
+      className={`h-full w-full object-contain ${bg} ${locked ? "grayscale" : ""}`} />
   );
 }
 

@@ -4,10 +4,10 @@ export type Tutor = { id: string; img: string };
 
 // Premium tutors are skipped for now: every tutor can be picked.
 export const TUTORS: Tutor[] = [
-  { id: "Emma", img: "/tutors/emma.svg" },
-  { id: "Kai", img: "/tutors/kai.svg" },
-  { id: "Nina", img: "/tutors/nina.svg" },
-  { id: "Niko", img: "/tutors/niko.svg" },
+  { id: "Emma", img: "/tutors/emma.png" },
+  { id: "Kai", img: "/tutors/kai.png" },
+  { id: "Nina", img: "/tutors/nina.png" },
+  { id: "Niko", img: "/tutors/niko.png" },
 ];
 export const tutorImg = (id: string) => (TUTORS.find((t) => t.id === id) ?? TUTORS[0]).img;
 
