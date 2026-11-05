@@ -6,6 +6,7 @@ export const setToken = (t: string) => localStorage.setItem(TOKEN_KEY, t);
 export const clearToken = () => localStorage.removeItem(TOKEN_KEY);
 
 export type Msg = { role: "user" | "assistant"; content: string };
+export type ChatMode = "chat" | "call" | "roleplay" | "debate";
 export type GenerateType = "sentence" | "word" | "dialogue" | "flashcards";
 export type Learner = { targetLanguage: string; level: string; nativeLanguage?: string };
 export type Achievement = { id: string; name: string; description: string; unlocked: boolean };
