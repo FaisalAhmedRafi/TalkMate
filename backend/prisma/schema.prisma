@@ -14,7 +14,8 @@ model User {
   lastName     String?
   avatar       String? // small square profile picture as a data URL (resized in the browser)
   timeZone     String             @default("UTC+00:00")
-  passwordHash String
+  passwordHash String? // null for accounts created with Google and never given a password
+  googleId     String?            @unique // Google account id (the `sub` claim)
   // Profile > Email / App notifications and Privacy preferences
   emailSpecialOffers Boolean @default(true)
   emailLearning      Boolean @default(true)
@@ -45,6 +46,18 @@ model User {
   personalization  Personalization?
   subscription     Subscription?
   supportMessages  SupportMessage[]
+  resetTokens      PasswordResetToken[]
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique // sha256 of the emailed token; the token itself is never stored
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }
 
 model Progress {

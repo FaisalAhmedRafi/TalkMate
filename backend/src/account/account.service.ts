@@ -87,6 +87,7 @@ export class AccountService {
   async changePassword(userId: string, dto: PasswordDto) {
     const u = await this.prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { passwordHash: true } });
     // 400, not 401: the frontend logs the user out on a 401
+    if (!u.passwordHash) throw new BadRequestException('This account signs in with Google. Use "Forgot your password?" on the login page to set a password.');
     if (!(await bcrypt.compare(dto.currentPassword, u.passwordHash))) throw new BadRequestException('Your current password is incorrect.');
     if (dto.currentPassword === dto.newPassword) throw new BadRequestException('Choose a password that is different from your current one.');
     await this.prisma.user.update({ where: { id: userId }, data: { passwordHash: await bcrypt.hash(dto.newPassword, 10) } });

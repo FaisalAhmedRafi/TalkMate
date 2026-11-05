@@ -1,9 +1,13 @@
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 const TOKEN_KEY = "talkmate-token";
 
-export const getToken = () => (typeof window === "undefined" ? null : localStorage.getItem(TOKEN_KEY));
-export const setToken = (t: string) => localStorage.setItem(TOKEN_KEY, t);
-export const clearToken = () => localStorage.removeItem(TOKEN_KEY);
+// "Remember this device" keeps the token in localStorage; otherwise it lives only until the browser session ends
+export const getToken = () => (typeof window === "undefined" ? null : localStorage.getItem(TOKEN_KEY) ?? sessionStorage.getItem(TOKEN_KEY));
+export const setToken = (t: string, remember = true) => {
+  clearToken();
+  (remember ? localStorage : sessionStorage).setItem(TOKEN_KEY, t);
+};
+export const clearToken = () => { localStorage.removeItem(TOKEN_KEY); sessionStorage.removeItem(TOKEN_KEY); };
 
 export type Msg = { role: "user" | "assistant"; content: string };
 export type ChatMode = "chat" | "call" | "roleplay" | "debate";
@@ -166,8 +170,11 @@ const post = <T>(path: string, body?: unknown, keepalive = false) => request<T>(
 
 export const api = {
   auth: {
-    login: (b: { email: string; password: string }) => post<{ token: string }>("/auth/login", b),
-    register: (b: { email: string; password: string; name?: string; referralCode?: string }) => post<{ token: string }>("/auth/register", b),
+    login: (b: { email: string; password: string; remember?: boolean }) => post<{ token: string }>("/auth/login", b),
+    register: (b: { email: string; password: string; name?: string; referralCode?: string; remember?: boolean }) => post<{ token: string }>("/auth/register", b),
+    google: (b: { credential: string; referralCode?: string; remember?: boolean }) => post<{ token: string }>("/auth/google", b),
+    forgotPassword: (email: string) => post<{ ok: true }>("/auth/forgot-password", { email }),
+    resetPassword: (b: { token: string; password: string }) => post<{ ok: true }>("/auth/reset-password", b),
   },
   progress: {
     get: () => request<Progress>("GET", "/progress"),

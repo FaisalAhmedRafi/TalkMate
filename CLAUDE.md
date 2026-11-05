@@ -65,12 +65,15 @@ Backend `.env` (git-ignored). The README says `cp .env.example .env`, but **ther
 | `PIXABAY_API_KEY` | no | free key from pixabay.com/api/docs (Pexels has paused new keys). Preferred photo source: each picture is downloaded once to `backend/media/pixabay/<id>.jpg` (git-ignored) and served by the API at `/media/pixabay/<id>.jpg`, because Pixabay URLs expire after 24 h and hotlinking is not allowed |
 | `PUBLIC_API_URL` | no | public base URL of the API, used to build the `/media/...` photo URLs; default `http://localhost:<PORT>`. Set it when the API is not on localhost |
 | `PEXELS_API_KEY` | no | fallback when there is no Pixabay key (existing keys only; new ones are paused); gives each Word Mode word and each Flashcards topic and card a stock photo. Without it the app shows an emoji (Word Mode) or an emoji on a gradient (Flashcards) |
-| `FRONTEND_URL` | no | comma-separated CORS origins, default `http://localhost:3000` |
+| `FRONTEND_URL` | no | comma-separated CORS origins, default `http://localhost:3000`; the first entry is also the base of password-reset links |
+| `GOOGLE_CLIENT_ID` | for Google sign-in | Google Cloud OAuth "Web application" client ID; add the frontend origin (e.g. `http://localhost:3000`) under Authorized JavaScript origins. Missing: `POST /auth/google` returns 503 |
+| `RESEND_API_KEY` | for reset emails | without it the reset link is printed in the backend log instead of emailed (fine for local dev) |
+| `MAIL_FROM` | no | sender for reset emails, default `TalkMate <onboarding@resend.dev>` (Resend's test sender only delivers to your own address; verify a domain for real use) |
 | `PORT` | no | default 4000, binds `0.0.0.0` |
 
 **OpenRouter free quota**: models ending in `:free` allow 20 requests/minute, and 50 requests/day unless the account has ever bought 10 credits (then 1,000/day). The limit is per account, so pinning another free model does not raise it. Every sentence set, pronunciation check, chat turn and feedback is one request. The backend logs OpenRouter's reason for each failure (`<model> -> 429 <reason>`).
 
-Frontend `.env.local` (copy from `.env.local.example`): `NEXT_PUBLIC_API_URL=http://localhost:4000`.
+Frontend `.env.local` (copy from `.env.local.example`): `NEXT_PUBLIC_API_URL=http://localhost:4000`, and `NEXT_PUBLIC_GOOGLE_CLIENT_ID` (same value as the backend `GOOGLE_CLIENT_ID`; without it the login page shows a hint instead of the Google button).
 
 ## Repository map
 
@@ -152,8 +155,13 @@ Global `ThrottlerGuard`: 20 requests / 60 s per client. `AuthController` overrid
 ### Auth (`src/auth`)
 - `POST /auth/register`: email lowercased/trimmed, 409 if it exists, bcryptjs cost 10, creates `User` and an empty `Progress` in one nested create, returns `{ token, user: { id, email } }`. An optional `referralCode` (4-12 letters/digits, upper-cased before lookup) links the new user to the inviter through `User.referredById`; an unknown code is silently ignored so a typo never blocks sign-up.
 - `POST /auth/login`: same error ("Invalid email or password.") for unknown email and wrong password. Keep it that way to avoid account enumeration.
-- JWT: `JwtModule.registerAsync({ global: true })`, secret from `JWT_SECRET`, 7-day expiry, payload `{ sub, email }`. No refresh tokens.
+- `POST /auth/google` `{ credential, referralCode?, remember? }`: the credential is a Google Identity Services ID token. The backend asks `https://oauth2.googleapis.com/tokeninfo` to validate it (no `google-auth-library`, so no new dependency), then requires `aud === GOOGLE_CLIENT_ID`, a Google `iss` and a verified email. Lookup order: `User.googleId`, then the same email (links the Google id to the existing account), else it creates a user (name from Google, empty `Progress`, optional referral). Accounts made this way have `passwordHash = null`, so `/auth/login` rejects them with the usual generic message and `PATCH` change-password answers 400 pointing to "Forgot your password?".
+- `POST /auth/forgot-password` `{ email }` (throttled 3 / 60 s): always returns `{ ok: true }` (no account enumeration). For a real user it deletes older `PasswordResetToken` rows, stores the sha256 of a random 32-byte token (1 hour expiry) and emails `<FRONTEND_URL>/reset-password?token=...` through `MailService` (Resend HTTP API, or a log line without `RESEND_API_KEY`). A send failure is logged but still answers ok.
+- `POST /auth/reset-password` `{ token, password }`: 400 if the token is unknown or expired; otherwise sets the new bcrypt hash and deletes all of the user's reset tokens (single use). This also lets a Google-only user set a first password. Existing JWTs are not revoked (stateless).
+- "Remember this device": `remember` on register/login/google picks a 30-day JWT, otherwise 1 day. The frontend stores the token in `localStorage` when remembered and in `sessionStorage` otherwise (`getToken` checks both, `clearToken` clears both).
+- JWT: `JwtModule.registerAsync({ global: true })`, secret from `JWT_SECRET`, default 7-day expiry overridden per login by `remember`, payload `{ sub, email }`. No refresh tokens.
 - `AuthGuard` parses `Authorization: Bearer <token>` and sets `req.user = { id, email }`. Controllers read `req.user.id`.
+- Frontend pages: `/login` (two illustrations, `public/login/illustration-left.png` and `illustration-right.png`, shown beside the card on large screens; Google button via Google Identity Services, remember checkbox), `/forgot-password`, `/reset-password?token=`.
 - DTOs: register email max 254, password 8..72 (bcrypt ignores bytes past 72), name optional max 60. Login password max 72.
 
 ### Progress (`src/progress`)
