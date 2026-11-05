@@ -23,7 +23,7 @@ const NAV = [
   { id: "learn", label: "Learn", icon: BookOpen, dot: false },
   { id: "courses", label: "Courses", icon: GraduationCap, dot: false },
   { id: "explore", label: "Explore", icon: Library, dot: false },
-  { id: "progress", label: "Progress", icon: TrendingUp, dot: true },
+  { id: "progress", label: "Progress", icon: TrendingUp, dot: false },
 ];
 const TABS = ["learn", "courses", "explore", "progress"]; // sections that can be opened with /dashboard?tab=...
 
