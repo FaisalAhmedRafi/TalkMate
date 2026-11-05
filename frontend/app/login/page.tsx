@@ -171,17 +171,19 @@ export default function LoginPage() {
   const switchMode = () => { setMode(login ? "register" : "login"); setError(null); setConfirm(""); setShowPassword(false); setShowConfirm(false); };
   const eye = (shown: boolean, toggle: () => void) => (
     <button type="button" onClick={toggle} aria-label={shown ? "Hide password" : "Show password"} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/50 hover:text-white">
-      {shown ? <EyeOff size={18} /> : <Eye size={18} />}
+      {shown ? <EyeOff size={20} /> : <Eye size={20} />}
     </button>
   );
   const brand = <>Talk<span className="text-violet-300">Mate</span></>;
   const fade = "linear-gradient(to bottom, black 92%, transparent 100%)";
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-gradient-to-br from-[#2b1b7a] via-[#4a2fc4] to-[#6b3ff0] p-3 text-white">
-      <div className="grid w-full max-w-[1180px] grid-cols-1 gap-4 rounded-[36px] border border-white/10 bg-gradient-to-br from-[#38279a] via-[#432bb5] to-[#331f93] p-3 shadow-[0_30px_90px_rgba(15,5,60,0.55)] lg:grid-cols-[1.1fr_1fr] lg:p-4">
+    <main className="min-h-screen bg-[#140e33] text-white">
+      {/* same as browser zoom 110%: scales every rem size (text, spacing) on this page only; removed when leaving the page */}
+      <style>{"html { font-size: 110%; }"}</style>
+      <div className="grid min-h-screen w-full grid-cols-1 lg:grid-cols-[1.1fr_1fr]">
         {/* left: the same on login and register, only the right side changes */}
-        <section className="relative hidden min-h-[600px] overflow-hidden rounded-3xl bg-[#4a13c0] lg:block">
+        <section className="relative hidden min-h-screen overflow-hidden bg-[#4a13c0] lg:block">
           <style>{ROBOT_CSS}</style>
           {/* "slice" keeps the picture covering the area like object-cover, so the layers stay lined up at any size */}
           <svg viewBox="0 0 1306 1205" preserveAspectRatio="xMidYMid slice" aria-hidden="true" className="absolute inset-x-0 top-0 h-[74%] w-full" style={{ maskImage: fade, WebkitMaskImage: fade }}>
@@ -195,7 +197,7 @@ export default function LoginPage() {
           <div className="absolute inset-x-0 bottom-0 h-[45%] bg-gradient-to-t from-[#1c0861] via-[#2c0e8f]/70 to-transparent" />
           <div className="absolute left-7 top-6 flex items-center gap-3">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo/logo-mark.png" alt="" width={52} height={52} className="h-[52px] w-[52px] object-contain" />
+            <img src="/logo/logo-mark.png" alt="" width={57} height={57} className="h-[57px] w-[57px] object-contain" />
             <p className="text-3xl font-bold tracking-tight">{brand}</p>
           </div>
           <div className="absolute inset-x-8 bottom-8">
@@ -205,11 +207,11 @@ export default function LoginPage() {
         </section>
 
         {/* right: login / register / verify */}
-        <section className="flex items-center justify-center rounded-3xl border border-white/5 bg-[#140e33] px-5 py-8 lg:px-10">
-          <form onSubmit={submit} className="w-full max-w-[420px]">
+        <section className="flex min-h-screen items-center justify-center bg-[#140e33] px-6 py-10 lg:px-16">
+          <form onSubmit={submit} className="w-full max-w-[460px]">
             <div className="mb-5 flex items-center gap-2 lg:hidden">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/logo/logo-mark.png" alt="" width={40} height={40} className="h-10 w-10 object-contain" />
+              <img src="/logo/logo-mark.png" alt="" width={44} height={44} className="h-11 w-11 object-contain" />
               <p className="text-xl font-bold tracking-tight">{brand}</p>
             </div>
 
@@ -253,7 +255,7 @@ export default function LoginPage() {
                           value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" />
                       </Field>
                     </div>
-                    <p className="text-[11px] leading-tight text-white/50">Use 8+ characters with upper and lowercase letters and a number.</p>
+                    <p className="text-xs leading-tight text-white/50">Use minimum 8 characters with upper and lowercase letters and a number.</p>
                   </>
                 ) : (
                   <Field icon={Lock} right={eye(showPassword, () => setShowPassword((v) => !v))}>
@@ -284,7 +286,7 @@ export default function LoginPage() {
             {info && <p role="status" className="mt-3 rounded-lg bg-emerald-500/15 px-3 py-2 text-sm text-emerald-300">{info}</p>}
 
             <button disabled={busy} className="mt-5 flex w-full items-center justify-center gap-2 rounded-full bg-[#7c4dff] py-3.5 text-base font-semibold shadow-[0_8px_24px_rgba(124,77,255,0.35)] hover:bg-[#8f68ff] disabled:opacity-50">
-              {busy ? "Please wait…" : <>{login ? "Sign in" : register ? "Create Account" : "Verify and continue"} <ArrowRight size={18} /></>}
+              {busy ? "Please wait…" : <>{login ? "Sign in" : register ? "Create Account" : "Verify and continue"} <ArrowRight size={20} /></>}
             </button>
 
             {mode === "verify" && (
@@ -308,9 +310,9 @@ export default function LoginPage() {
 
               {GOOGLE_CLIENT_ID ? (
                 // the official Google button (needed to get the ID token) sits invisibly on top of a styled button, so clicks still go to Google
-                <div className="group relative h-[52px] w-full">
+                <div className="group relative h-[57px] w-full">
                   <div className="pointer-events-none flex h-full w-full items-center justify-center gap-2 rounded-2xl border border-violet-400/50 bg-white/[0.03] text-sm font-medium text-white/90 transition group-hover:bg-violet-500/10">
-                    <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
+                    <svg width="20" height="20" viewBox="0 0 48 48" aria-hidden="true">
                       <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
                       <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
                       <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
@@ -342,7 +344,7 @@ export default function LoginPage() {
 function Field({ icon: Icon, right, children }: { icon: LucideIcon; right?: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="relative">
-      <Icon size={18} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-white/50" />
+      <Icon size={20} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-white/50" />
       {children}
       {right}
     </div>
