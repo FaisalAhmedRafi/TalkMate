@@ -104,6 +104,13 @@ export class WordService {
     return { covers: Object.fromEntries(entries) as Record<string, string | null> };
   }
 
+  /** One stock photo per Learn unit, searched by the unit title (e.g. "Simple interactions"); null without an image key. */
+  async unitCovers(titles: string[]) {
+    const list = [...new Set(titles.map((t) => t.trim()).filter(Boolean))].slice(0, 12);
+    const entries = await Promise.all(list.map(async (t): Promise<[string, string | null]> => [t, (await this.images.search(`unit-cover:${t.toLowerCase()}`, t))?.url ?? null]));
+    return { covers: Object.fromEntries(entries) as Record<string, string | null> };
+  }
+
   /** Open a lesson: resume the saved one, or make a new one with the AI. */
   async start(userId: string, dto: WordStartDto) {
     const found = findWord(dto.wordId);

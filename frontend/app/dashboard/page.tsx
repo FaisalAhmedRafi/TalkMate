@@ -150,8 +150,8 @@ export default function Dashboard() {
                 {MODES.map((m) => {
                   const locked = m.premium && !s.premium;
                   return (
-                    <li key={m.id}>
-                      <button onClick={() => clickMode(m)} className="group block w-full rounded-2xl border border-white/[0.07] bg-[#171827] p-3 text-left transition-all duration-300 hover:-translate-y-1 hover:border-violet-400/30 hover:bg-[#1C1D31] hover:shadow-[0_10px_35px_rgba(124,92,255,0.08)] sm:p-4">
+                    <li key={m.id} className="h-full">
+                      <button onClick={() => clickMode(m)} className="group flex h-full w-full flex-col rounded-2xl border border-white/[0.07] bg-[#171827] p-3 text-left transition-all duration-300 hover:-translate-y-1 hover:border-violet-400/30 hover:bg-[#1C1D31] hover:shadow-[0_10px_35px_rgba(124,92,255,0.08)] sm:p-4">
                         <div className="relative aspect-[7/4] w-full overflow-hidden rounded-xl ring-1 ring-white/[0.04] transition group-hover:ring-violet-400/20">
                           <ModeImage mode={m} locked={locked} />
                           {locked && (

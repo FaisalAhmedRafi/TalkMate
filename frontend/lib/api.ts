@@ -210,6 +210,8 @@ export const api = {
   word: {
     units: () => request<WordUnits>("GET", "/word/units"),
     covers: (ids: string[]) => request<{ covers: Record<string, string | null> }>("GET", `/word/covers?ids=${encodeURIComponent(ids.join(","))}`),
+    /** One photo per Learn unit title (the same photo is used for all three exercises of the unit) */
+    unitCovers: (titles: string[]) => request<{ covers: Record<string, string | null> }>("GET", `/word/unit-covers?titles=${encodeURIComponent(titles.join("|"))}`),
     /** Opens a lesson: resumes an unfinished one, unless restart is true */
     start: (wordId: string, b: Learner & { restart?: boolean }) => {
       if (!wordId) throw new Error("Couldn't tell which word to practise. Go back and pick one.");

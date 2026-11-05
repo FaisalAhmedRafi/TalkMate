@@ -75,6 +75,20 @@ export const COURSES: Course[] = [
   pro("sales", "Sales", "sales", "🤝", ["formal-introductions", "shopping-for-clothes"]),
 ];
 
+/** Pixabay/Pexels search phrase for each course's cover photo (the course title alone, e.g. "Beginner 1", finds nothing useful) */
+export const COURSE_PHOTO: Record<string, string> = {
+  "absolute-beginner-1": "seedling sprout growing", "absolute-beginner-2": "green plant leaves", "beginner-1": "headphones listening music",
+  "beginner-2": "cozy house home", "intermediate-1": "colorful art supplies", "intermediate-2": "compass map adventure",
+  "upper-intermediate-1": "laptop coding", "upper-intermediate-2": "circus tent", "advanced-1": "rocket launch",
+  "advanced-2": "road cycling", "proficient-1": "suspension bridge", "proficient-2": "swimming goggles pool",
+  travel: "airplane travel airport", "social-life": "friends party toast", dating: "romantic dinner couple", "moving-abroad": "moving boxes new home",
+  shopping: "shopping bags", fitness: "gym workout", "food-and-dining": "restaurant dining table", "work-and-careers": "office business meeting",
+  "family-life": "family together home", "small-talks": "coffee conversation cafe",
+  business: "business handshake", medicine: "doctor stethoscope", engineering: "construction engineer", tech: "computer technology",
+  hospitality: "hotel reception", law: "law gavel justice", retail: "retail store shop", "customer-support": "headset customer service",
+  logistics: "cargo ship containers", sales: "sales presentation",
+};
+
 export const COURSE_GROUPS: { id: CourseGroup; title: string }[] = [
   { id: "level", title: "Level courses" },
   { id: "lifestyle", title: "Lifestyle courses" },

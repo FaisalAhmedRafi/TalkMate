@@ -14,6 +14,9 @@ export class WordController {
   /** Stock photos for some words, e.g. /word/covers?ids=apple,house (used by Explore) */
   @Get('covers') covers(@Query('ids') ids = '') { return this.word.covers(ids.split(',').map((x) => x.trim()).filter(Boolean)); }
 
+  /** One photo per Learn unit title, e.g. /word/unit-covers?titles=Simple interactions|Pronouns (titles separated by |) */
+  @Get('unit-covers') unitCovers(@Query('titles') titles = '') { return this.word.unitCovers(titles.split('|')); }
+
   /** Open a lesson: resumes an unfinished one, or creates a new one (or restarts it) */
   @Post('start') start(@Req() req: any, @Body() dto: WordStartDto) { return this.word.start(req.user.id, dto); }
 

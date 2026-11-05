@@ -17,6 +17,7 @@ export function LearnView({ course, premium, onSelectCourse, onLocked }: {
   const [words, setWords] = useState<Record<string, WordStar>>({});
   const [skills, setSkills] = useState<Record<string, SentenceSkill>>({});
   const [topics, setTopics] = useState<Record<string, DialogueTopicInfo>>({});
+  const [unitCovers, setUnitCovers] = useState<Record<string, string | null>>({});
   const [picker, setPicker] = useState(false);
   const [guide, setGuide] = useState<number | null>(null); // index of the unit whose book button is open
   const pickerRef = useRef<HTMLDivElement>(null);
@@ -33,6 +34,23 @@ export function LearnView({ course, premium, onSelectCourse, onLocked }: {
     return () => { live = false; };
   }, []);
 
+  // One photo per unit, searched by the unit title and shared by its three exercises (12 titles max per call).
+  const titlesKey = pathFor(course).map((u) => u.title).join("|");
+  useEffect(() => {
+    let live = true;
+    setUnitCovers({});
+    const titles = titlesKey.split("|").filter(Boolean);
+    const chunks: string[][] = [];
+    for (let i = 0; i < titles.length; i += 12) chunks.push(titles.slice(i, i + 12));
+    Promise.allSettled(chunks.map((c) => api.word.unitCovers(c))).then((rs) => {
+      if (!live) return;
+      const merged: Record<string, string | null> = {};
+      for (const r of rs) if (r.status === "fulfilled") Object.assign(merged, r.value.covers);
+      setUnitCovers(merged);
+    });
+    return () => { live = false; };
+  }, [titlesKey]);
+
   useEffect(() => {
     if (!picker) return;
     const off = (e: MouseEvent) => { if (!pickerRef.current?.contains(e.target as Node)) setPicker(false); };
@@ -43,13 +61,14 @@ export function LearnView({ course, premium, onSelectCourse, onLocked }: {
 
   const units = useMemo(() => pathFor(course).map((u: Unit) => {
     const w = words[u.word], s = skills[u.sentence], d = topics[u.dialogue];
+    const cover = unitCovers[u.title]; // same photo for all three exercises of the unit
     const steps: Step[] = [
-      { n: 1, mode: "Word Mode", href: `/word/${u.word}`, emoji: w?.emoji ?? "🃏", title: titleize(u.word), done: !!w?.passed },
-      { n: 2, mode: "Sentence Mode", href: `/sentence/${u.sentence}`, emoji: s?.emoji ?? "🗣️", title: s?.title ?? titleize(u.sentence), done: !!s?.passed },
-      { n: 3, mode: "Dialogue Mode", href: `/dialogue/${u.dialogue}`, emoji: d?.emoji ?? "💭", cover: d?.cover, title: d?.title ?? titleize(u.dialogue), done: !!d?.passed },
+      { n: 1, mode: "Word Mode", href: `/word/${u.word}`, emoji: w?.emoji ?? "🃏", cover, title: titleize(u.word), done: !!w?.passed },
+      { n: 2, mode: "Sentence Mode", href: `/sentence/${u.sentence}`, emoji: s?.emoji ?? "🗣️", cover, title: s?.title ?? titleize(u.sentence), done: !!s?.passed },
+      { n: 3, mode: "Dialogue Mode", href: `/dialogue/${u.dialogue}`, emoji: d?.emoji ?? "💭", cover, title: d?.title ?? titleize(u.dialogue), done: !!d?.passed },
     ];
     return { title: u.title, steps };
-  }), [course, words, skills, topics]);
+  }), [course, words, skills, topics, unitCovers]);
 
   const total = units.length * 3;
   const done = units.reduce((n, u) => n + u.steps.filter((s) => s.done).length, 0);
