@@ -107,7 +107,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="flex min-h-screen bg-[#0D0E17] text-white">
+    <div className="relative flex min-h-screen bg-[#0D0E17] text-white">
       <aside className="fixed inset-y-0 left-0 z-10 hidden w-[236px] flex-col justify-between border-r border-white/[0.07] bg-[#11121D] px-6 py-7 md:flex">
         <button onClick={() => { setActive("home"); setOpenMode(null); router.push("/dashboard"); }} aria-label="TalkMate home"
           className="flex items-center gap-2 rounded-lg text-left transition-opacity hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500">
@@ -129,9 +129,9 @@ export default function Dashboard() {
         <div aria-hidden />
       </aside>
 
-      {/* account button: top-right corner, shows the user's name and an icon */}
+      {/* account button: fixed place in the top-right corner of the page (scrolls away with it), shows the user's name and an icon */}
       <button onClick={() => onNav("account")} aria-label="Account"
-        className={`fixed right-4 top-4 z-20 flex max-w-[220px] items-center gap-2.5 rounded-full border py-1.5 pl-1.5 pr-4 text-sm font-medium backdrop-blur transition-colors lg:right-8 lg:top-6 ${active === "account" ? "border-violet-500/30 bg-violet-600/20 text-violet-200" : "border-white/10 bg-[#171827]/90 text-white/80 hover:bg-white/[0.08] hover:text-white"}`}>
+        className={`absolute right-4 top-4 z-20 flex max-w-[220px] items-center gap-2.5 rounded-full border py-1.5 pl-1.5 pr-4 text-sm font-medium transition-colors lg:right-8 lg:top-6 ${active === "account" ? "border-violet-500/30 bg-violet-600/20 text-violet-200" : "border-white/10 bg-[#171827]/90 text-white/80 hover:bg-white/[0.08] hover:text-white"}`}>
         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-violet-500/25 text-violet-200"><User size={16} /></span>
         <span className="truncate">{displayName}</span>
       </button>
