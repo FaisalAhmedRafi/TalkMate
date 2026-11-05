@@ -114,9 +114,8 @@ export default function Dashboard() {
       <aside className="fixed inset-y-0 left-0 z-10 hidden w-[236px] flex-col justify-between border-r border-white/[0.07] bg-[#11121D] px-6 py-7 md:flex">
         <button onClick={() => { setActive("home"); setOpenMode(null); router.push("/dashboard"); }} aria-label="TalkMate home"
           className="flex items-center gap-2 rounded-lg text-left transition-opacity hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500">
-          <svg width="32" height="32" viewBox="0 0 32 32" fill="none" aria-hidden="true">
-            <path d="M6 8l8 8-8 8M16 8l8 8-8 8" stroke="#A78BFA" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo/logo-mark.png" alt="" width={36} height={36} className="h-9 w-9 object-contain" />
           <span className="text-lg font-bold tracking-tight text-white">TalkMate</span>
         </button>
         <nav className="flex flex-col gap-1">
@@ -144,13 +143,14 @@ export default function Dashboard() {
 
       <main className="w-full px-4 py-7 md:pl-[260px] md:pr-8 lg:px-10 lg:py-9 lg:pl-[260px]">
         {active === "home" ? (
-          <div className="mx-auto grid max-w-[1500px] gap-8 xl:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="mx-auto max-w-[1500px]">
+            <div className="mb-7">
+              <p className="mb-2 text-xs font-semibold tracking-[0.18em] text-violet-300">YOUR LEARNING SPACE</p>
+              <h1 className="mb-2 text-3xl font-bold tracking-tight">Learning modes</h1>
+              <p className="text-sm text-white/45">Choose how you want to practice today.</p>
+            </div>
+            <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_320px]">
             <section>
-              <div className="mb-7">
-                <p className="mb-2 text-xs font-semibold tracking-[0.18em] text-violet-300">YOUR LEARNING SPACE</p>
-                <h1 className="mb-2 text-3xl font-bold tracking-tight">Learning modes</h1>
-                <p className="text-sm text-white/45">Choose how you want to practice today.</p>
-              </div>
               <ul className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-3">
                 {MODES.map((m) => {
                   const locked = m.premium && !s.premium;
@@ -244,6 +244,7 @@ export default function Dashboard() {
                 </div>
               </div>
             </aside>
+            </div>
           </div>
         ) : active === "account" ? (
           <AccountView s={s} onSettings={updateSettings} onLogout={logout} onToast={setToast} onSnapshot={setS} />

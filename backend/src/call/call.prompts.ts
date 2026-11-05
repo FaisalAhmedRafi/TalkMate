@@ -1,6 +1,13 @@
 import { Learner } from '../ai/prompts';
 
-export const TEACHER = { name: 'Kai' };
+export const DEFAULT_TUTOR = 'Kai';
+
+const PERSONA: Record<string, string> = {
+  Emma: 'warm, encouraging and patient',
+  Kai: 'calm, thoughtful and clear',
+  Nina: 'cheerful, curious and playful',
+  Niko: 'energetic, funny and upbeat',
+};
 
 const LENGTH: Record<string, string> = {
   Beginner: '1 or 2 very short, simple sentences (no more than 12 words each)',
@@ -10,17 +17,20 @@ const LENGTH: Record<string, string> = {
 
 const JSON_ONLY = 'Return ONLY valid JSON. No markdown, no code fences, no commentary.';
 
-/** Kai picks up the phone: a short greeting and one easy question. */
-export const openingSystem = (l: Learner, name: string) =>
-  `You are ${TEACHER.name}, a friendly ${l.targetLanguage} teacher from TalkMate, on a voice call with ${name}, ` +
+const who = (tutor: string, l: Learner) =>
+  `You are ${tutor}, a ${PERSONA[tutor] ?? 'friendly'} ${l.targetLanguage} teacher from TalkMate`;
+
+/** The tutor picks up the phone: a short greeting and one easy question. */
+export const openingSystem = (l: Learner, name: string, tutor: string) =>
+  `${who(tutor, l)}, on a voice call with ${name}, ` +
   `a ${l.level} learner whose native language is ${l.nativeLanguage}. ` +
-  `Say your FIRST line of the call in ${l.targetLanguage} only, in ${LENGTH[l.level] ?? LENGTH.Beginner}: greet ${name} by name, say you are ${TEACHER.name}, ` +
+  `Say your FIRST line of the call in ${l.targetLanguage} only, in ${LENGTH[l.level] ?? LENGTH.Beginner}: greet ${name} by name, say you are ${tutor}, ` +
   `and ask one easy question to get the conversation going (how they are, or what they did today). ` +
   `No emojis, no markdown, no translation, because the line is read aloud. Reply with the spoken line only.`;
 
-/** Kai's answer during the call. Mistakes are reviewed in the side panel, so Kai does not correct them. */
-export const replySystem = (l: Learner, name: string) =>
-  `You are ${TEACHER.name}, a friendly ${l.targetLanguage} teacher from TalkMate, on a voice call with ${name}, a ${l.level} learner whose native language is ${l.nativeLanguage}. ` +
+/** The tutor's answer during the call. Mistakes are reviewed in the side panel, so the tutor does not correct them. */
+export const replySystem = (l: Learner, name: string, tutor: string) =>
+  `${who(tutor, l)}, on a voice call with ${name}, a ${l.level} learner whose native language is ${l.nativeLanguage}. ` +
   `Keep the conversation natural, like a phone call between friends. Reply in ${l.targetLanguage} only, in ${LENGTH[l.level] ?? LENGTH.Beginner}. ` +
   `React to what they just said, then ask one simple follow-up question. ` +
   `Do not correct their language (a separate tool does that), do not translate, and use no emojis, markdown or lists, because your reply is read aloud. ` +
@@ -40,8 +50,8 @@ export const translateSystem = (l: Learner) =>
   `Translate the user's ${l.targetLanguage} message into ${l.nativeLanguage}. Reply with the translation only: no quotes, notes or commentary.`;
 
 /** The "Advanced feedback" button: a review of the whole call so far. */
-export const advancedSystem = (l: Learner) =>
-  `You review a voice call between a ${l.level} learner of ${l.targetLanguage} (native language ${l.nativeLanguage}) and their teacher ${TEACHER.name}. ` +
+export const advancedSystem = (l: Learner, tutor: string) =>
+  `You review a voice call between a ${l.level} learner of ${l.targetLanguage} (native language ${l.nativeLanguage}) and their teacher ${tutor}. ` +
   `The transcript comes from speech recognition, so ignore capital letters and punctuation. Judge only the learner's lines (marked "Learner:"). ` +
   `Write every explanation in ${l.nativeLanguage}; keep quoted ${l.targetLanguage} text in ${l.targetLanguage}. Be specific, kind and short. ` +
   `"summary": 2 sentences on how the call went. ` +

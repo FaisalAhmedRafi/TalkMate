@@ -8,9 +8,8 @@ import { clearToken } from "@/lib/api";
 export const Logo = () => (
   <Link href="/dashboard" aria-label="TalkMate home"
     className="flex items-center gap-2 rounded-lg transition-opacity hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500">
-    <svg width="32" height="32" viewBox="0 0 32 32" fill="none" aria-hidden="true">
-      <path d="M6 8l8 8-8 8M16 8l8 8-8 8" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
+    {/* eslint-disable-next-line @next/next/no-img-element */}
+    <img src="/logo/logo-mark.png" alt="" width={36} height={36} className="h-9 w-9 object-contain" />
     <span className="text-lg font-bold tracking-tight">TalkMate</span>
   </Link>
 );

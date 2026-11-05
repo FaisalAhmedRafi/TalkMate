@@ -368,11 +368,11 @@ export default function ChatPage() {
                   <ul className="divide-y divide-white/10 px-0">
                     {items.map(({ icon: Icon, title, sub, act, accent }) => (
                       <li key={title}>
-                        <button onClick={act} className={`${menuItem} ${accent ? "text-indigo-300" : ""}`}>
+                        <button onClick={act} className={`${menuItem} group hover:text-indigo-300`}>
                           <Icon size={24} className="mt-1 shrink-0" />
                           <span>
                             <span className="block text-lg font-semibold">{title}</span>
-                            <span className={`mt-1 block text-sm ${accent ? "font-semibold text-indigo-300" : "text-white/60"}`}>{sub}</span>
+                            <span className="mt-1 block text-sm text-white/60 group-hover:text-indigo-300">{sub}</span>
                           </span>
                         </button>
                       </li>

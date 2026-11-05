@@ -75,6 +75,11 @@ export type CallAdvanced = {
   summary: string; strengths: string[]; tips: string[];
   mistakes: { original: string; corrected: string; explanation: string }[];
 };
+/** A saved Call-mode call: the messages plus the reviews and translations keyed by message index */
+export type CallSaved = {
+  id: string; tutor: string; messages: Msg[]; reviews: Record<string, CallFeedback>; translations: Record<string, string>; seconds: number;
+};
+export type CallHistoryItem = { id: string; tutor: string; title: string; count: number; seconds: number; updatedAt: string };
 /** One learner message checked by the AI: corrected is empty when the message was fine */
 export type CharacterFeedback = { correct: boolean; corrected: string; explanation: string; translation: string };
 /** A saved conversation: the messages plus the reviews and translations keyed by message index */
@@ -247,13 +252,23 @@ export const api = {
     translate: (b: Learner & { text: string }) => post<{ translation: string }>("/debate/translate", b),
   },
   call: {
-    /** Kai picks up: his first line */
-    start: (b: Learner) => post<{ teacher: { name: string }; opening: string }>("/call/start", b),
-    /** Kai's answer; messages start with his greeting and end with the learner's new message */
-    reply: (b: Learner & { messages: Msg[] }) => post<{ reply: string }>("/call/reply", b),
+    /** The tutor picks up: their first line */
+    start: (b: Learner & { tutor: string }) => post<{ teacher: { name: string }; opening: string }>("/call/start", b),
+    /** The tutor's answer; messages start with their greeting and end with the learner's new message */
+    reply: (b: Learner & { tutor: string; messages: Msg[] }) => post<{ reply: string }>("/call/reply", b),
     feedback: (b: Learner & { message: string }) => post<CallFeedback>("/call/feedback", b),
     translate: (b: Learner & { text: string }) => post<{ translation: string }>("/call/translate", b),
-    advanced: (b: Learner & { messages: Msg[] }) => post<CallAdvanced>("/call/advanced", b),
+    advanced: (b: Learner & { tutor: string; messages: Msg[] }) => post<CallAdvanced>("/call/advanced", b),
+    /** The open call for the current target language, or null */
+    session: () => request<{ session: CallSaved | null }>("GET", "/call/session"),
+    save: (b: { tutor: string; messages: Msg[]; reviews: Record<string, CallFeedback>; translations: Record<string, string>; seconds: number }) =>
+      request<{ ok: boolean }>("PUT", "/call/session", b),
+    /** "Start a new call": the open call moves to the history */
+    archive: () => post<{ ok: boolean }>("/call/archive"),
+    history: () => request<{ calls: CallHistoryItem[] }>("GET", "/call/history"),
+    /** Opens a call from the history (the open call moves to the history) */
+    open: (id: string) => post<{ session: CallSaved }>(`/call/history/${encodeURIComponent(id)}/open`),
+    remove: (id: string) => request<{ ok: boolean }>("DELETE", `/call/history/${encodeURIComponent(id)}`),
   },
   characters: {
     list: () => request<CharacterList>("GET", "/characters"),

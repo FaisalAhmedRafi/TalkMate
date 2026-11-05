@@ -45,8 +45,12 @@ export default function LoginPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-[#16161c] p-4 text-white">
       <form onSubmit={submit} className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#1f1f27] p-6">
-        <p className="text-sm font-bold tracking-tight text-white/60">TalkMate</p>
-        <h1 className="mt-1 text-xl font-semibold">{mode === "login" ? "Log in" : "Create your account"}</h1>
+        <div className="flex items-center gap-2">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo/logo-mark.png" alt="" width={40} height={40} className="h-10 w-10 object-contain" />
+          <p className="text-base font-bold tracking-tight text-white/80">TalkMate</p>
+        </div>
+        <h1 className="mt-3 text-xl font-semibold">{mode === "login" ? "Log in" : "Create your account"}</h1>
         {ref && mode === "register" && <p className="mt-2 text-xs text-white/60">Invite code <b>{ref}</b> applied.</p>}
         <div className="mt-5 space-y-3">
           {mode === "register" && (

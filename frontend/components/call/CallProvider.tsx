@@ -1,10 +1,11 @@
 "use client";
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PracticeTimer } from "@/components/PracticeTimer";
 import { api, getToken, type Progress } from "@/lib/api";
 
-type Ctx = { progress: Progress };
+type Patch = { language?: string; nativeLanguage?: string; level?: string };
+type Ctx = { progress: Progress; updateSettings: (patch: Patch) => Promise<void> };
 const CallCtx = createContext<Ctx | null>(null);
 
 export const useCall = () => {
@@ -29,6 +30,11 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       .catch((e) => setError(e instanceof Error ? e.message : "Couldn't load your progress"));
   }, [router]);
 
+  // Not optimistic: the Call page starts a new call when the target language changes, and the server must already know the new one by then.
+  const updateSettings = useCallback(async (patch: Patch) => {
+    setProgress(await api.progress.settings(patch));
+  }, []);
+
   if (!progress) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-[#16161c] text-white/70">
@@ -39,7 +45,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <CallCtx.Provider value={{ progress }}>
+    <CallCtx.Provider value={{ progress, updateSettings }}>
       <div className="min-h-screen bg-[#16161c] text-white">
         <PracticeTimer onSnapshot={setProgress} />
         {children}

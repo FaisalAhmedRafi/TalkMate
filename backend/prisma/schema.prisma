@@ -24,6 +24,7 @@ model User {
   characters   CharacterSession[]
   roleplays    RoleplaySession[]
   chats        ChatSession[]
+  calls        CallSession[]
   photos       PhotoProgress[]
 
   referralCode     String?          @unique // the code in the user's invite link
@@ -205,6 +206,26 @@ model ChatSession {
   reviews      Json     @default("{}") // { "<message index>": { correct, corrected, explanation, translation } }
   translations Json     @default("{}") // { "<message index>": "text in the learner's native language" }
   count        Int      @default(0) // messages the learner has sent
+  archived     Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([userId, language, archived])
+}
+
+// Call mode: every voice call with an AI tutor is a row. The newest row with archived=false is the open call;
+// "Start a new call" sets archived=true, and archived rows are the Call history list.
+model CallSession {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  language     String // the language being learned, so each language has its own calls
+  tutor        String   @default("Kai") // Emma, Kai, Nina or Niko
+  messages     Json     @default("[]") // [{ role, content }], starting with the tutor's greeting
+  reviews      Json     @default("{}") // { "<message index>": { correct, corrected, explanation } }
+  translations Json     @default("{}") // { "<message index>": "text in the learner's native language" }
+  count        Int      @default(0) // things the learner has said
+  seconds      Int      @default(0) // how long the call lasted
   archived     Boolean  @default(false)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt

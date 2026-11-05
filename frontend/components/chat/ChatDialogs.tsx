@@ -9,12 +9,14 @@ import { SPEEDS, TUTORS, type ChatPrefs } from "@/lib/chat";
 const BLUE = "bg-[#2f39c8] hover:bg-[#3a45d8]";
 
 /** "Pick your personal AI tutor": a card per tutor and a Save button. */
-export function TutorPicker({ current, onSave, onClose }: { current: string; onSave: (id: string) => void; onClose: () => void }) {
+export function TutorPicker({ current, onSave, onClose, hint = "Your personal AI tutor will appear in the chat mode." }: {
+  current: string; onSave: (id: string) => void; onClose: () => void; hint?: string;
+}) {
   const [picked, setPicked] = useState(current);
   return (
     <Modal onClose={onClose} label="Pick your personal AI tutor" wide>
       <h2 className="px-8 pt-4 text-center text-xl font-semibold">Pick your personal AI tutor</h2>
-      <p className="mt-4 text-center text-sm text-white/80">Your personal AI tutor will appear in the chat mode.</p>
+      <p className="mt-4 text-center text-sm text-white/80">{hint}</p>
       <ul className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
         {TUTORS.map((t) => (
           <li key={t.id}>
