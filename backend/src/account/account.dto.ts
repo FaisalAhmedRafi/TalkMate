@@ -1,4 +1,5 @@
-import { IsBoolean, IsIn, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
+import { IsBoolean, IsIn, IsOptional, IsString, Matches, MaxLength } from 'class-validator';
+import { PASSWORD_MESSAGE, PASSWORD_RULE } from '../auth/password.rule';
 import { optionsFor, SUPPORT_TYPES } from './account.options';
 import { PLAN_MONTHS } from './subscription.util';
 
@@ -22,7 +23,7 @@ export class ProfileDto {
 
 export class PasswordDto {
   @IsString() @MaxLength(72) currentPassword: string;
-  @IsString() @MinLength(8, { message: 'New password must be at least 8 characters.' }) @MaxLength(72) newPassword: string; // bcrypt ignores bytes past 72
+  @IsString() @Matches(PASSWORD_RULE, { message: PASSWORD_MESSAGE }) @MaxLength(72) newPassword: string; // bcrypt ignores bytes past 72
 }
 
 export class NotificationsDto {

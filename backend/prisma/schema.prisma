@@ -16,6 +16,7 @@ model User {
   timeZone     String             @default("UTC+00:00")
   passwordHash String? // null for accounts created with Google and never given a password
   googleId     String?            @unique // Google account id (the `sub` claim)
+  emailVerified Boolean           @default(false) // true once the user typed the code we emailed (Google accounts start true)
   // Profile > Email / App notifications and Privacy preferences
   emailSpecialOffers Boolean @default(true)
   emailLearning      Boolean @default(true)
@@ -47,6 +48,16 @@ model User {
   subscription     Subscription?
   supportMessages  SupportMessage[]
   resetTokens      PasswordResetToken[]
+  emailVerification EmailVerification?
+}
+
+model EmailVerification {
+  userId    String   @id
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash  String   // sha256 of "<userId>:<6-digit code>"; the code itself is never stored
+  expiresAt DateTime
+  attempts  Int      @default(0) // wrong guesses are capped, then a new code is needed
+  sentAt    DateTime @default(now()) // drives the resend cooldown
 }
 
 model PasswordResetToken {

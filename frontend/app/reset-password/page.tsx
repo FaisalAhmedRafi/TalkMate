@@ -5,6 +5,7 @@ import Link from "next/link";
 import { AuthShell, authButton, authInput, authLabel } from "@/components/AuthShell";
 import { ErrorText } from "@/components/Modal";
 import { api } from "@/lib/api";
+import { PASSWORD_HINT, passwordError } from "@/lib/password";
 
 export default function ResetPasswordPage() {
   const [token, setToken] = useState<string | null>(null);
@@ -20,6 +21,8 @@ export default function ResetPasswordPage() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (busy || !token) return;
+    const weak = passwordError(password);
+    if (weak) { setError(weak); return; }
     if (password !== confirm) { setError("The two passwords don't match."); return; }
     setBusy(true); setError(null);
     try {
@@ -47,6 +50,7 @@ export default function ResetPasswordPage() {
           <div>
             <label className={authLabel} htmlFor="password">New password</label>
             <input id="password" type="password" required minLength={8} maxLength={72} placeholder="8+ characters" className={authInput} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
+            <p className="mt-1.5 text-xs text-white/50">{PASSWORD_HINT}</p>
           </div>
           <div>
             <label className={authLabel} htmlFor="confirm">Confirm password</label>

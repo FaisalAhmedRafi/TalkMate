@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Bell, ChevronDown, Eye, EyeOff, Lock, Mail, Plus, Shield, Trash2, User, type LucideIcon } from "lucide-react";
 import { ErrorText, Modal } from "@/components/Modal";
 import { api, type NotificationPrefs, type PrivacyPrefs, type ProfileData, type Progress } from "@/lib/api";
+import { passwordError } from "@/lib/password";
 import { SubPage } from "./SubPage";
 
 type Page = "menu" | "details" | "password" | "email" | "app" | "privacy";
@@ -260,7 +261,8 @@ function PasswordPage({ onBack, onToast }: { onBack: () => void; onToast: (m: st
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!ready || busy) return;
-    if (next.length < 8) return setError("New password must be at least 8 characters.");
+    const weak = passwordError(next);
+    if (weak) return setError(weak);
     if (next !== repeat) return setError("The new passwords don't match.");
     setBusy(true); setError(null);
     try {
@@ -272,7 +274,7 @@ function PasswordPage({ onBack, onToast }: { onBack: () => void; onToast: (m: st
   };
 
   return (
-    <SubPage title="Change password" subtitle="You can set a new password for your account below." onBack={onBack}>
+    <SubPage title="Change password" subtitle="Choose a new password: at least 8 characters with an uppercase letter, a lowercase letter and a number." onBack={onBack}>
       <form onSubmit={save} className="space-y-6">
         <PasswordField id="current" title="Current password" value={current} onChange={setCurrent} autoComplete="current-password" />
         <PasswordField id="new" title="New password" value={next} onChange={setNext} autoComplete="new-password" />

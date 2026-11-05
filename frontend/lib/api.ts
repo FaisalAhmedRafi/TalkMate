@@ -161,7 +161,8 @@ async function request<T>(method: string, path: string, body?: unknown, keepaliv
       window.location.href = "/login";
     }
     const m = (data as any).message;
-    throw new Error(Array.isArray(m) ? m.join(", ") : m || `Request failed (${res.status})`);
+    // the backend's machine-readable `code` (e.g. EMAIL_NOT_VERIFIED) rides along on the error
+    throw Object.assign(new Error(Array.isArray(m) ? m.join(", ") : m || `Request failed (${res.status})`), { code: (data as any).code as string | undefined });
   }
   return data as T;
 }
@@ -171,7 +172,9 @@ const post = <T>(path: string, body?: unknown, keepalive = false) => request<T>(
 export const api = {
   auth: {
     login: (b: { email: string; password: string; remember?: boolean }) => post<{ token: string }>("/auth/login", b),
-    register: (b: { email: string; password: string; name?: string; referralCode?: string; remember?: boolean }) => post<{ token: string }>("/auth/register", b),
+    register: (b: { email: string; password: string; firstName: string; lastName: string; referralCode?: string; remember?: boolean }) => post<{ verify: true; email: string }>("/auth/register", b),
+    verifyEmail: (b: { email: string; code: string; remember?: boolean }) => post<{ token: string }>("/auth/verify-email", b),
+    resendVerification: (email: string) => post<{ ok: true }>("/auth/resend-verification", { email }),
     google: (b: { credential: string; referralCode?: string; remember?: boolean }) => post<{ token: string }>("/auth/google", b),
     forgotPassword: (email: string) => post<{ ok: true }>("/auth/forgot-password", { email }),
     resetPassword: (b: { token: string; password: string }) => post<{ ok: true }>("/auth/reset-password", b),
