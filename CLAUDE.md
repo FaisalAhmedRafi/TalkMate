@@ -57,7 +57,7 @@ Backend `.env` (git-ignored). The README says `cp .env.example .env`, but **ther
 
 | Var | Required | Notes |
 |---|---|---|
-| `DATABASE_URL` | yes | e.g. `postgresql://talkpal:talkpal@localhost:5432/talkpal` |
+| `DATABASE_URL` | yes | e.g. `postgresql://talkpal:talkpal@localhost:5432/talkmate` |
 | `JWT_SECRET` | yes | `getOrThrow`, so the app will not boot without it |
 | `OPENROUTER_API_KEY` | for `/ai/*` | missing key returns 503 "OPENROUTER_API_KEY is not set on the server" |
 | `OPENROUTER_MODEL` | no | default `openrouter/free` |
