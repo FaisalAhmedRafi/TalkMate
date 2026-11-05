@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { BookOpen, Check, ChevronDown } from "lucide-react";
 import { Modal } from "@/components/Modal";
-import { tileOf } from "@/components/CoursesView";
+import { CourseThumb, useCourseCovers } from "@/components/CoursesView";
 import { api, type DialogueTopicInfo, type SentenceSkill, type WordStar } from "@/lib/api";
 import { COURSES, COURSE_GROUPS, pathFor, titleize, type Course, type Unit } from "@/lib/courses";
 
@@ -18,6 +18,7 @@ export function LearnView({ course, premium, onSelectCourse, onLocked }: {
   const [skills, setSkills] = useState<Record<string, SentenceSkill>>({});
   const [topics, setTopics] = useState<Record<string, DialogueTopicInfo>>({});
   const [unitCovers, setUnitCovers] = useState<Record<string, string | null>>({});
+  const courseCovers = useCourseCovers(); // photos for the course picker, same ones as the Courses tab
   const [picker, setPicker] = useState(false);
   const [guide, setGuide] = useState<number | null>(null); // index of the unit whose book button is open
   const pickerRef = useRef<HTMLDivElement>(null);
@@ -83,7 +84,7 @@ export function LearnView({ course, premium, onSelectCourse, onLocked }: {
       <div ref={pickerRef} className="relative mt-4">
         <button onClick={() => setPicker((v) => !v)} aria-haspopup="listbox" aria-expanded={picker} aria-label="Change course"
           className="flex items-center gap-3 rounded-xl px-2 py-1.5 text-[13px] font-semibold hover:bg-white/5">
-          <span className={`flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br text-lg ${tileOf(course)}`}>{course.emoji}</span>
+          <CourseThumb course={course} covers={courseCovers} className="h-9 w-9 rounded-full text-lg" />
           {course.title}
           <ChevronDown size={14} className={`transition-transform ${picker ? "rotate-180" : ""}`} />
         </button>
@@ -95,7 +96,7 @@ export function LearnView({ course, premium, onSelectCourse, onLocked }: {
                 {COURSES.filter((c) => c.group === g.id).map((c) => (
                   <button key={c.id} role="option" aria-selected={c.id === course.id} onClick={() => { setPicker(false); onSelectCourse(c); }}
                     className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-[13px] font-semibold hover:bg-white/5 ${c.id === course.id ? "bg-white/10" : ""}`}>
-                    <span className={`flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br text-sm ${tileOf(c)}`}>{c.emoji}</span>
+                    <CourseThumb course={c} covers={courseCovers} className="h-7 w-7 rounded-full text-sm" />
                     <span className="flex-1">{c.title}</span>
                     {c.badge && <span className="text-[10px] text-white/50">{c.badge}</span>}
                   </button>
