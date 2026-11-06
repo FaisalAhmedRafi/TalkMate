@@ -151,13 +151,13 @@ function DetailsPage({ profile, onBack, onSaved, onToast, onSnapshot }: {
     if (!/^image\/(jpeg|png|webp)$/.test(file.type)) return onToast("Choose a JPG, PNG or WebP picture.");
     if (file.size > 10 * 1024 * 1024) return onToast("That picture is too big. Choose one under 10 MB.");
     setPhotoBusy(true);
-    try { onSaved(await api.account.saveAvatar(await resizeImage(file))); onToast("Photo saved"); }
+    try { onSaved(await api.account.saveAvatar(await resizeImage(file))); api.progress.get().then(onSnapshot).catch(() => {}); onToast("Photo saved"); }
     catch (err) { onToast(err instanceof Error ? err.message : "Couldn't save the picture"); }
     finally { setPhotoBusy(false); }
   };
   const removePhoto = async () => {
     setPhotoBusy(true);
-    try { onSaved(await api.account.removeAvatar()); onToast("Photo removed"); }
+    try { onSaved(await api.account.removeAvatar()); api.progress.get().then(onSnapshot).catch(() => {}); onToast("Photo removed"); }
     catch (err) { onToast(err instanceof Error ? err.message : "Couldn't remove the picture"); }
     finally { setPhotoBusy(false); }
   };

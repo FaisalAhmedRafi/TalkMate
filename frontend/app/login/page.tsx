@@ -246,12 +246,12 @@ export default function LoginPage() {
                 {register ? (
                   <>
                     <div className="grid grid-cols-2 gap-3">
-                      <Field icon={Lock} right={eye(showPassword, () => setShowPassword((v) => !v))}>
-                        <input id="password" aria-label="Password" className={`${input} pr-10`} type={showPassword ? "text" : "password"} placeholder="Create Password" required minLength={8} maxLength={72}
+                      <Field icon={Lock}>
+                        <input id="password" aria-label="Password" className={`${input} pr-10`} type="password" placeholder="Create Password" required minLength={8} maxLength={72}
                           value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
                       </Field>
-                      <Field icon={Lock} right={eye(showConfirm, () => setShowConfirm((v) => !v))}>
-                        <input id="confirm" aria-label="Confirm password" className={`${input} pr-10`} type={showConfirm ? "text" : "password"} placeholder="Confirm Password" required minLength={8} maxLength={72}
+                      <Field icon={Lock}>
+                        <input id="confirm" aria-label="Confirm password" className={`${input} pr-10`} type="password" placeholder="Confirm Password" required minLength={8} maxLength={72}
                           value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" />
                       </Field>
                     </div>

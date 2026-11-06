@@ -37,7 +37,7 @@ const TIERS = [
   { min: 15, name: "Platinum", ring: "from-cyan-200 to-sky-500" },
 ];
 const EMPTY: Progress = {
-  email: "", name: null, xp: 0, streak: 0, longest: 0, messages: 0, premium: false,
+  email: "", name: null, avatar: null, xp: 0, streak: 0, longest: 0, messages: 0, premium: false,
   language: "Spanish", nativeLanguage: "English", level: "Beginner", today: [],
 };
 
@@ -108,19 +108,19 @@ export default function Dashboard() {
 
   return (
     <div className="relative flex min-h-screen bg-[#0D0E17] text-white">
-      <aside className="fixed inset-y-0 left-0 z-10 hidden w-[236px] flex-col justify-between border-r border-white/[0.07] bg-[#11121D] px-6 py-7 md:flex">
+      <aside className="fixed inset-y-0 left-0 z-10 hidden w-[84px] flex-col justify-between border-r border-white/[0.07] bg-[#11121D] px-3 py-7 md:flex lg:w-[236px] lg:px-6">
         <button onClick={() => { setActive("home"); setOpenMode(null); router.push("/dashboard"); }} aria-label="TalkMate home"
-          className="flex items-center gap-2 rounded-lg text-left transition-opacity hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500">
+          className="flex items-center justify-center gap-2 rounded-lg text-left transition-opacity hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 lg:justify-start">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo/logo-mark.png" alt="" width={36} height={36} className="h-9 w-9 object-contain" />
-          <span className="text-lg font-bold tracking-tight text-white">TalkMate</span>
+          <span className="hidden text-lg font-bold tracking-tight text-white lg:inline">TalkMate</span>
         </button>
         <nav className="flex flex-col gap-1">
           {NAV.map(({ id, label, icon: Icon, dot }) => (
-            <button key={id} onClick={() => onNav(id)}
-              className={`relative flex items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-medium transition-all duration-200 ${active === id ? "bg-violet-600/15 text-violet-300 ring-1 ring-violet-500/20" : "text-white/55 hover:bg-white/[0.04] hover:text-white"}`}>
-              <Icon size={18} />
-              {label}
+            <button key={id} onClick={() => onNav(id)} title={label} aria-label={label}
+              className={`relative flex items-center justify-center gap-3 rounded-xl px-0 py-3 text-left text-sm font-medium transition-all duration-200 lg:justify-start lg:px-4 ${active === id ? "bg-violet-600/15 text-violet-300 ring-1 ring-violet-500/20" : "text-white/55 hover:bg-white/[0.04] hover:text-white"}`}>
+              <Icon size={20} />
+              <span className="hidden lg:inline">{label}</span>
               {dot && <span className="absolute left-[34px] top-2 h-2 w-2 rounded-full bg-pink-500" />}
             </button>
           ))}
@@ -129,40 +129,66 @@ export default function Dashboard() {
         <div aria-hidden />
       </aside>
 
-      {/* account button: fixed place in the top-right corner of the page (scrolls away with it), shows the user's name and an icon */}
-      <button onClick={() => onNav("account")} aria-label="Account"
-        className={`absolute right-4 top-4 z-20 flex max-w-[220px] items-center gap-2.5 rounded-full border py-1.5 pl-1.5 pr-4 text-sm font-medium transition-colors lg:right-8 lg:top-6 ${active === "account" ? "border-violet-500/30 bg-violet-600/20 text-violet-200" : "border-white/10 bg-[#171827]/90 text-white/80 hover:bg-white/[0.08] hover:text-white"}`}>
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-violet-500/25 text-violet-200"><User size={16} /></span>
-        <span className="truncate">{displayName}</span>
+      {/* phone: logo in the top-left corner (the sidebar is hidden below md) */}
+      <button onClick={() => { setActive("home"); setOpenMode(null); router.push("/dashboard"); }} aria-label="TalkMate home"
+        className="absolute left-4 top-4 z-20 flex items-center gap-2 py-1 md:hidden">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/logo/logo-mark.png" alt="" width={32} height={32} className="h-8 w-8 object-contain" />
+        <span className="text-base font-bold tracking-tight">TalkMate</span>
       </button>
 
-      <main className="w-full px-4 pb-7 pt-20 md:pl-[260px] md:pr-8 lg:px-10 lg:pb-9 lg:pt-24 lg:pl-[260px]">
+      {/* account button: fixed place in the top-right corner of the page (scrolls away with it), shows the user's name and an icon */}
+      <button onClick={() => onNav("account")} aria-label="Account"
+        className={`absolute right-4 top-4 z-20 flex max-w-[220px] items-center gap-2.5 rounded-full border py-1.5 pl-1.5 pr-1.5 text-sm font-medium transition-colors sm:pr-4 md:right-6 lg:right-8 lg:top-6 ${active === "account" ? "border-violet-500/30 bg-violet-600/20 text-violet-200" : "border-white/10 bg-[#171827]/90 text-white/80 hover:bg-white/[0.08] hover:text-white"}`}>
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-violet-500/25 text-violet-200">
+          {s.avatar
+            // eslint-disable-next-line @next/next/no-img-element
+            ? <img src={s.avatar} alt="" className="h-full w-full object-cover" />
+            : <User size={16} />}
+        </span>
+        <span className="hidden truncate sm:inline">{displayName}</span>
+      </button>
+
+      {/* phone: bottom tab bar with the same sections as the sidebar */}
+      <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-white/[0.08] bg-[#11121D]/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
+        {NAV.map(({ id, label, icon: Icon }) => (
+          <button key={id} onClick={() => { onNav(id); window.scrollTo({ top: 0 }); }} aria-current={active === id ? "page" : undefined}
+            className={`flex flex-col items-center gap-1 px-1 pb-2 pt-2.5 text-[11px] font-medium transition-colors ${active === id ? "text-violet-300" : "text-white/50 active:text-white"}`}>
+            <span className={`flex h-7 w-12 items-center justify-center rounded-full transition-colors ${active === id ? "bg-violet-600/20" : ""}`}><Icon size={20} /></span>
+            {label}
+          </button>
+        ))}
+      </nav>
+
+      <main className="w-full px-4 pb-28 pt-20 md:pb-9 md:pl-[108px] md:pr-6 lg:px-10 lg:pb-9 lg:pt-24 lg:pl-[260px]">
         {active === "home" ? (
           <div className="mx-auto max-w-[1500px]">
             <div className="mb-7">
               <p className="mb-2 text-xs font-semibold tracking-[0.18em] text-violet-300">YOUR LEARNING SPACE</p>
-              <h1 className="mb-2 text-3xl font-bold tracking-tight">Learning modes</h1>
+              <h1 className="mb-2 text-2xl font-bold tracking-tight sm:text-3xl">Learning modes</h1>
               <p className="text-sm text-white/45">Choose how you want to practice today.</p>
             </div>
             <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_320px]">
             <section>
-              <ul className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-3">
+              <ul className="grid grid-cols-1 gap-4 sm:grid-cols-[repeat(auto-fill,minmax(270px,1fr))]">
                 {MODES.map((m) => {
                   const locked = m.premium && !s.premium;
                   return (
                     <li key={m.id} className="h-full">
-                      <button onClick={() => clickMode(m)} className="group flex h-full w-full flex-col rounded-2xl border border-white/[0.07] bg-[#171827] p-3 text-left transition-all duration-300 hover:-translate-y-1 hover:border-violet-400/30 hover:bg-[#1C1D31] hover:shadow-[0_10px_35px_rgba(124,92,255,0.08)] sm:p-4">
-                        <div className="relative aspect-[7/4] w-full overflow-hidden rounded-xl ring-1 ring-white/[0.04] transition group-hover:ring-violet-400/20">
+                      <button onClick={() => clickMode(m)} className="group flex h-full w-full flex-row items-center gap-4 rounded-2xl border border-white/[0.07] bg-[#171827] p-3 text-left transition-all duration-300 hover:-translate-y-1 hover:border-violet-400/30 hover:bg-[#1C1D31] hover:shadow-[0_10px_35px_rgba(124,92,255,0.08)] sm:flex-col sm:items-stretch sm:gap-0 sm:p-4">
+                        <div className="relative aspect-[7/4] w-32 shrink-0 overflow-hidden rounded-xl sm:w-full ring-1 ring-white/[0.04] transition group-hover:ring-violet-400/20">
                           <ModeImage mode={m} locked={locked} />
                           {locked && (
-                            <span className="absolute right-3 top-3 flex items-center gap-1.5 rounded-full bg-[#11121D]/85 py-1 pl-1 pr-2.5 text-xs font-bold backdrop-blur">
+                            <span className="absolute right-1.5 top-1.5 flex items-center gap-1.5 rounded-full bg-[#11121D]/85 p-1 text-xs font-bold backdrop-blur sm:right-3 sm:top-3 sm:py-1 sm:pl-1 sm:pr-2.5">
                               <span className="flex h-5 w-5 items-center justify-center rounded-full bg-violet-500"><Lock size={11} /></span>
-                              Premium
+                              <span className="hidden sm:inline">Premium</span>
                             </span>
                           )}
                         </div>
-                        <h2 className="mt-3 text-sm font-semibold transition-colors group-hover:text-violet-300">{m.title}</h2>
-                        <p className="mt-2 text-xs leading-relaxed text-white/45">{m.desc}</p>
+                        <div className="min-w-0 flex-1">
+                          <h2 className="text-lg font-semibold leading-snug transition-colors group-hover:text-violet-300 sm:mt-3 sm:text-sm">{m.title}</h2>
+                          <p className="mt-1.5 text-[15px] leading-relaxed text-white/55 sm:mt-2 sm:text-xs sm:text-white/45">{m.desc}</p>
+                        </div>
                       </button>
                     </li>
                   );
@@ -170,9 +196,9 @@ export default function Dashboard() {
               </ul>
             </section>
 
-            <aside className="flex flex-col gap-5 lg:self-start">
+            <aside className="grid items-start gap-4 sm:gap-5 md:grid-cols-2 xl:flex xl:flex-col xl:items-stretch xl:self-start">
               {!s.premium && (
-                <div className="relative overflow-hidden rounded-2xl border border-violet-400/15 bg-gradient-to-br from-[#30205B] via-[#211B3D] to-[#191827] p-6">
+                <div className="relative overflow-hidden rounded-2xl border border-violet-400/15 bg-gradient-to-br from-[#30205B] via-[#211B3D] to-[#191827] p-5 sm:p-6">
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-violet-400/15 py-1.5 pl-1.5 pr-2.5 text-xs font-bold text-violet-200">
                     <Star size={12} fill="white" /> Premium
                   </span>
@@ -195,7 +221,7 @@ export default function Dashboard() {
                 </button>
               )}
 
-              <div className="rounded-2xl border border-white/[0.07] bg-[#171827] p-6">
+              <div className="rounded-2xl border border-white/[0.07] bg-[#171827] p-5 sm:p-6 md:col-span-2 xl:col-span-1">
                 <div className="flex items-center gap-4">
                   <span className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-gradient-to-br ${tier.ring} p-[5px]`}>
                     <span className="flex h-full w-full items-center justify-center rounded-full bg-[#171827]"><Sparkle size={22} fill="white" /></span>
@@ -216,18 +242,18 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-white/[0.07] bg-[#171827] px-6">
-                <div className="flex items-center justify-between py-6">
+              <div className="rounded-2xl border border-white/[0.07] bg-[#171827] px-5 sm:px-6 md:col-span-2 xl:col-span-1">
+                <div className="flex items-center justify-between py-5 sm:py-6">
                   <span className="text-xl font-semibold">Ongoing streak</span>
                   <span className="rounded-full bg-violet-500/15 px-4 py-2.5 text-sm font-semibold text-violet-300">{s.streak} {s.streak === 1 ? "day" : "days"}</span>
                 </div>
-                <div className="flex items-center justify-between border-t border-white/5 py-6">
+                <div className="flex items-center justify-between border-t border-white/5 py-5 sm:py-6">
                   <span className="text-xl font-semibold">Longest streak</span>
                   <span className="rounded-full bg-white/[0.06] px-4 py-2.5 text-sm font-semibold text-white/70">{s.longest} {s.longest === 1 ? "day" : "days"}</span>
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-white/[0.07] bg-[#171827] p-6">
+              <div className="rounded-2xl border border-white/[0.07] bg-[#171827] p-5 sm:p-6 md:col-span-2 xl:col-span-1">
                 <h3 className="text-xl font-semibold">Daily feedback</h3>
                 <p className="mt-3 text-sm text-white/60">Practice in AI modes and receive personalized daily feedback.</p>
                 <div className="mt-6 flex items-center justify-between">
@@ -279,7 +305,7 @@ export default function Dashboard() {
       )}
 
       {toast && (
-        <div role="status" className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full border border-white/10 bg-[#222336] px-5 py-3 text-sm font-semibold text-white shadow-2xl">{toast}</div>
+        <div role="status" className="fixed bottom-24 left-1/2 z-50 max-w-[90vw] text-center md:bottom-6 -translate-x-1/2 rounded-full border border-white/10 bg-[#222336] px-5 py-3 text-sm font-semibold text-white shadow-2xl">{toast}</div>
       )}
     </div>
   );

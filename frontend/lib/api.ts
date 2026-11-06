@@ -137,7 +137,7 @@ export type SubscriptionInfo = {
   nextPayment: string | null; accessUntil: string | null; premium: boolean;
 };
 export type Progress = {
-  email: string; name: string | null; xp: number; streak: number; longest: number; messages: number;
+  email: string; name: string | null; avatar: string | null; xp: number; streak: number; longest: number; messages: number;
   premium: boolean; language: string; nativeLanguage: string; level: string; today: string[];
 };
 
