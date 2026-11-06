@@ -81,9 +81,9 @@ export function ExploreView({ premium, onLocked }: { premium: boolean; onLocked:
   const photos = data ? open(data.photos, 5, "photo", (p) => p.passed) : [];
 
   return (
-    <div className="mx-auto w-full max-w-[779px]">
+    <div className="mx-auto w-full max-w-[560px] md:max-w-[1200px]">
       <h1 className="text-lg font-semibold">Explore</h1>
-      <p className="mt-3 text-[13px] text-white/80">Find your daily picks below.</p>
+      <p className="mt-3 text-sm text-white/80 md:text-[13px]">Find your daily picks below.</p>
       <hr className="mt-4 border-white/10" />
 
       {error && (
@@ -95,14 +95,13 @@ export function ExploreView({ premium, onLocked }: { premium: boolean; onLocked:
       {!data && !error && <p className="mt-8 text-white/60">Loading today's picks…</p>}
 
       {data && !error && (
-        <div className="mt-6 grid items-start gap-5 md:grid-cols-2">
-          <div className="flex flex-col gap-5">
+        <div className="mt-6 columns-1 gap-5 md:columns-2 xl:columns-3">
             {daily && (
-              <section aria-label="Your daily pick" className="rounded-2xl bg-[#fbeaa8] p-5 text-[#16161c]">
+              <section aria-label="Your daily pick" className="mb-5 break-inside-avoid rounded-2xl bg-[#fbeaa8] p-5 text-[#16161c]">
                 <h2 className="text-lg font-semibold">Your daily pick</h2>
-                <p className="mt-3 text-[13px] font-medium leading-snug">Here is your daily pick to improve your language learning skills with an engaging experience.</p>
+                <p className="mt-3 text-[15px] font-medium leading-snug md:text-[13px]">Here is your daily pick to improve your language learning skills with an engaging experience.</p>
                 <hr className="mt-4 border-black/10" />
-                <h3 className="mt-4 text-sm font-semibold">{daily.mode}</h3>
+                <h3 className="mt-4 text-base font-semibold md:text-sm">{daily.mode}</h3>
                 {link(daily.modeId, daily.href,
                   <Cover title={daily.title} cover={daily.cover} emoji={daily.emoji} seed={daily.id} />,
                   "relative mt-4 block aspect-[2/1] overflow-hidden rounded-xl", daily.title)}
@@ -138,12 +137,10 @@ export function ExploreView({ premium, onLocked }: { premium: boolean; onLocked:
                 <Strip>
                   {photos.map((p) => <Thumb key={p.id} src={p.image} emoji="🖼️" seed={p.id} />)}
                 </Strip>
-                {link("photo", `/photo/${photos[0].id}`, "Start now", "mt-5 block w-full rounded-xl bg-[#3a3b4e] py-4 text-center text-xs font-semibold hover:bg-[#44455c]")}
+                {link("photo", `/photo/${photos[0].id}`, "Start now", "mt-5 block w-full rounded-xl bg-[#3a3b4e] py-4 text-center text-sm font-semibold hover:bg-[#44455c] md:text-xs")}
               </Card>
             )}
-          </div>
 
-          <div className="flex flex-col gap-5">
             {roleplays.length > 0 && (
               <Card mode="roleplay" sub="Today's scenarios">
                 <TilePair>
@@ -158,7 +155,7 @@ export function ExploreView({ premium, onLocked }: { premium: boolean; onLocked:
                 <Strip>
                   {words.map((w) => <Thumb key={w.id} src={wordCovers[w.id] ?? null} emoji={w.emoji} seed={w.id} />)}
                 </Strip>
-                {link("word", `/word/${words[0].id}`, "Play now", "mt-5 block w-full rounded-xl bg-[#3a3b4e] py-4 text-center text-xs font-semibold hover:bg-[#44455c]")}
+                {link("word", `/word/${words[0].id}`, "Play now", "mt-5 block w-full rounded-xl bg-[#3a3b4e] py-4 text-center text-sm font-semibold hover:bg-[#44455c] md:text-xs")}
               </Card>
             )}
 
@@ -181,8 +178,8 @@ export function ExploreView({ premium, onLocked }: { premium: boolean; onLocked:
                           <Cover title="" cover={t.cover} emoji={t.emoji} seed={t.id} />
                         </span>
                         <span className="block px-3 py-3">
-                          <span className="block text-[13px] font-semibold">{t.title}</span>
-                          <span className="mt-1 block text-[10px] text-white/60">{t.total} Flashcards</span>
+                          <span className="block text-[15px] font-semibold md:text-[13px]">{t.title}</span>
+                          <span className="mt-1 block text-xs text-white/60 md:text-[10px]">{t.total} Flashcards</span>
                         </span>
                       </>, "block overflow-hidden rounded-xl border border-white/10 bg-[#1c1c24]", t.title)}
                     </div>
@@ -199,7 +196,6 @@ export function ExploreView({ premium, onLocked }: { premium: boolean; onLocked:
                 </div>
               </Card>
             )}
-          </div>
         </div>
       )}
       {data && !error && <p className="mt-8 text-center text-[11px] text-white/40">Photos from <a href="https://pixabay.com" target="_blank" rel="noreferrer" className="underline">Pixabay</a> and <a href="https://www.pexels.com" target="_blank" rel="noreferrer" className="underline">Pexels</a>; characters from <a href="https://www.wikipedia.org" target="_blank" rel="noreferrer" className="underline">Wikipedia</a>. Picks change every day.</p>}
@@ -229,11 +225,11 @@ function dailyPick(d: Data, day: string): (Daily & { id: string; modeId: string 
 function Card({ mode, sub, children }: { mode: string; sub: string; children: ReactNode }) {
   const m = modeOf(mode);
   return (
-    <section aria-label={m.title} className="rounded-2xl border border-white/5 bg-[#1f1f27] p-5">
+    <section aria-label={m.title} className="mb-5 break-inside-avoid rounded-2xl border border-white/5 bg-[#1f1f27] p-5">
       <h2 className="text-lg font-semibold">{m.title}</h2>
-      <p className="mt-3 text-[13px] leading-snug text-white/80">{m.desc}</p>
+      <p className="mt-3 text-[15px] leading-snug text-white/80 md:text-[13px]">{m.desc}</p>
       <hr className="mt-4 border-white/10" />
-      <h3 className="mt-4 text-sm font-semibold">{sub}</h3>
+      <h3 className="mt-4 text-base font-semibold md:text-sm">{sub}</h3>
       <div className="mt-4">{children}</div>
     </section>
   );
@@ -260,7 +256,7 @@ function Cover({ title, cover, emoji, seed }: { title: string; cover: string | n
 // a darkened top edge keeps the white title readable on any picture
 const Shade = () => <span className="pointer-events-none absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-black/70 to-transparent" />;
 const Title = ({ text }: { text: string }) => (
-  <span lang="en" style={{ hyphens: "auto" }} className="absolute left-3 right-3 top-3 text-[15px] font-semibold leading-tight text-white drop-shadow">{text}</span>
+  <span lang="en" style={{ hyphens: "auto" }} className="absolute left-3 right-3 top-3 text-base font-semibold leading-tight text-white drop-shadow md:text-[15px]">{text}</span>
 );
 
 /** A row of five equal square thumbnails (slightly overlapping). */
