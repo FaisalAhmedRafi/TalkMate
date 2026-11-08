@@ -11,7 +11,18 @@ const LENGTH: Record<string, string> = {
 
 const JSON_ONLY = 'Return ONLY valid JSON. No markdown, no code fences, no commentary.';
 
+/** The admin wrote the sentences (in English): the AI only translates them, in the same order. */
+const fromSource = (unit: SentenceUnit, skill: SentenceSkill, l: Learner) =>
+  `You prepare ${l.targetLanguage} speaking-practice sentences for a ${l.level} learner whose native language is ${l.nativeLanguage}. ` +
+  `Unit: "${unit.title}". Skill: "${skill.title}". Translate each of these ${skill.sentences!.length} English sentences into natural ${l.targetLanguage}, ` +
+  `keeping the meaning and the order, using ${LENGTH[l.level] ?? LENGTH.Beginner} where the meaning allows: ` +
+  skill.sentences!.map((s, i) => `${i + 1}. ${s}`).join(' ') + ` ` +
+  `Each result must be ONE sentence that is easy to read aloud: no numbering, no quotation marks, no emojis, no romanization or brackets, and end with normal punctuation. ` +
+  `translation is the sentence in ${l.nativeLanguage}. note is one short tip in ${l.nativeLanguage} about meaning, grammar or usage. ` +
+  `${JSON_ONLY} Schema: {"items":[{"sentence":"","translation":"","note":""}]}`;
+
 export const sessionSystem = (unit: SentenceUnit, skill: SentenceSkill, l: Learner) =>
+  skill.sentences?.length ? fromSource(unit, skill, l) :
   `You write ${l.targetLanguage} speaking-practice sentences for a ${l.level} learner whose native language is ${l.nativeLanguage}. ` +
   `Unit: "${unit.title}". Skill: "${skill.title}" (${skill.description}). ` +
   `Write exactly ${SENTENCES_PER_SESSION} different sentences that a real person would say in this situation, in ${l.targetLanguage}, ` +

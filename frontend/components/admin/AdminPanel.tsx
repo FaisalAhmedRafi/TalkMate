@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, FileJson, Loader2, Plus, Search, Trash2 } from "lucide-react";
+import { ArrowLeft, FileJson, Loader2, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { admin, type AdminMode, type ImportResult, type ModeInfo, type Overview, type Row } from "@/lib/admin";
 import { AddElementModal } from "./AddElementModal";
 import { ImportModal } from "./ImportModal";
@@ -19,6 +19,7 @@ export function AdminPanel() {
   const [customOnly, setCustomOnly] = useState(false);
   const [shown, setShown] = useState(PAGE);
   const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState<Row | null>(null);
   const [importing, setImporting] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -115,7 +116,7 @@ export function AdminPanel() {
             <>
               <div className="flex items-center justify-between border-b border-white/[0.06] px-4 py-2 text-xs text-white/50">
                 <span>{filtered.length === (rows?.length ?? 0) ? `${filtered.length} elements` : `${filtered.length} of ${rows?.length} elements`}</span>
-                <span className="hidden sm:inline">Built-in elements are read-only; the ones you add can be deleted.</span>
+                <span className="hidden sm:inline">Built-in elements are read-only; the ones you add can be edited or deleted.</span>
               </div>
               {filtered.length === 0 ? (
                 <p className="p-6 text-sm text-white/50">Nothing matches.</p>
@@ -135,6 +136,7 @@ export function AdminPanel() {
                       {r.custom ? (
                         <>
                           <span className="shrink-0 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-300">Added</span>
+                          <button onClick={() => setEditing(r)} aria-label={`Edit ${r.title}`} className="shrink-0 rounded-md p-1.5 text-white/40 hover:bg-white/10 hover:text-white"><Pencil size={15} /></button>
                           <button onClick={() => remove(r)} aria-label={`Delete ${r.title}`} className="shrink-0 rounded-md p-1.5 text-white/40 hover:bg-red-500/15 hover:text-red-300"><Trash2 size={15} /></button>
                         </>
                       ) : (
@@ -155,6 +157,7 @@ export function AdminPanel() {
       </div>
 
       {adding && info && overview && <AddElementModal info={info} overview={overview} onClose={() => { setAdding(false); load(mode); }} onChanged={patchInfo} onToast={setToast} />}
+      {editing && info && overview && <AddElementModal info={info} overview={overview} edit={editing} onClose={() => { setEditing(null); load(mode); }} onChanged={patchInfo} onToast={setToast} />}
       {importing && info && <ImportModal info={info} onClose={() => setImporting(false)} onDone={onImported} />}
       {toast && <div role="status" className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full bg-white px-4 py-2 text-sm font-medium text-black shadow-lg">{toast}</div>}
     </div>

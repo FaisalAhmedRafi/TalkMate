@@ -48,7 +48,7 @@ export class CharactersService {
       total: CHARACTERS.length,
       talked: [...saved.values()].filter((n) => n > 0).length,
       characters: CHARACTERS.map((c) => ({
-        id: c.id, name: c.name, emoji: c.emoji, hue: c.hue, kind: c.kind, about: c.about, cover: this.photos.cover(c.id),
+        id: c.id, name: c.name, emoji: c.emoji, hue: c.hue, kind: c.kind, about: c.about, cover: c.portrait ?? this.photos.cover(c.id),
         saved: saved.get(c.id) ?? 0, // learner messages in the saved conversation (0 = none)
       })),
     };

@@ -89,7 +89,7 @@ export class DialogueService {
     const topic = findDialogue(dto.topicId);
     if (!topic) throw new NotFoundException('Unknown dialogue.');
     const l = learner(dto);
-    const key = `${topic.id}:${l.targetLanguage}:${l.nativeLanguage}:${l.level}`;
+    const key = `${topic.id}:${topic.rev ?? ''}:${l.targetLanguage}:${l.nativeLanguage}:${l.level}`;
 
     let script = dto.fresh ? undefined : this.scripts.get(key);
     if (!script) {

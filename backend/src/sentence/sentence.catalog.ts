@@ -1,7 +1,8 @@
 // The Sentence Mode curriculum: 10 units x 3 skills, matching the unit list in the UI.
 // Skill ids are URL slugs (/sentence/<id>), so never rename one once users have progress on it.
 
-export type SentenceSkill = { id: string; title: string; description: string; emoji: string };
+/** `sentences`: optional English lines written by an admin; when present the AI translates them instead of inventing its own. */
+export type SentenceSkill = { id: string; title: string; description: string; emoji: string; sentences?: string[] };
 export type SentenceUnit = { number: number; title: string; skills: SentenceSkill[] };
 
 const s = (id: string, title: string, emoji: string, description: string): SentenceSkill => ({ id, title, emoji, description });

@@ -3,7 +3,10 @@
 // Topic ids are URL slugs (/flashcards/people) and the keys stored in FlashcardDeck: never rename one
 // that users already have a deck for.
 
-export type FlashTopic = { id: string; title: string; emoji: string; photo: string; hint: string };
+/** `words`: optional English word list (5 to 15) written by an admin; the deck is then exactly those words instead of 15 chosen by the AI. */
+export type FlashTopic = { id: string; title: string; emoji: string; photo: string; hint: string; words?: string[] };
+/** Cards in a deck: the admin's own word list when there is one, else CARDS_PER_DECK. */
+export const deckSize = (t: FlashTopic) => t.words?.length || CARDS_PER_DECK;
 
 /** Every deck has this many cards. */
 export const CARDS_PER_DECK = 15;

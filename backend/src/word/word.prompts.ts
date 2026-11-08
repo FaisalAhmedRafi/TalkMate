@@ -16,6 +16,10 @@ export const lessonSystem = (item: WordItem, unit: WordUnit, l: Learner) =>
   `word is the ${l.targetLanguage} word for it in dictionary form: for languages whose nouns take an article or gender marker, include it ` +
   `(for example "der Freund" or "la casa"); verbs are in the infinitive. translation is its short meaning in ${l.nativeLanguage}. ` +
   `Then write exactly ${SENTENCES_PER_WORD} different natural sentences in ${l.targetLanguage} that each use this word (in any correct grammatical form), ` +
+  (item.examples?.length
+    ? `The first ${item.examples.length} must be translations of these English sentences, in this order, rewritten so each still uses the word: ${item.examples.map((e, i) => `${i + 1}. ${e}`).join(' ')} ` +
+      (item.examples.length < SENTENCES_PER_WORD ? `You write the other ${SENTENCES_PER_WORD - item.examples.length} yourself. ` : '')
+    : '') +
   `${LENGTH[l.level] ?? LENGTH.Beginner}. Each must be ONE sentence that is easy to read aloud: no numbering, no quotation marks, ` +
   `no emojis, no romanization or brackets, ending with normal punctuation. ` +
   `For every sentence give: translation in ${l.nativeLanguage}; note, one short tip in ${l.nativeLanguage}; and chunks, 2 to 3 consecutive pieces ` +

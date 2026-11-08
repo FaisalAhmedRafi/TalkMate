@@ -169,7 +169,12 @@ async function request<T>(method: string, path: string, body?: unknown, keepaliv
 
 const post = <T>(path: string, body?: unknown, keepalive = false) => request<T>("POST", path, body, keepalive);
 
+export type CourseItemInfo = import("./courses").CourseItem;
+
 export const api = {
+  content: {
+    courseItems: () => request<{ items: CourseItemInfo[] }>("GET", "/content/course-items"),
+  },
   auth: {
     login: (b: { email: string; password: string; remember?: boolean }) => post<{ token: string }>("/auth/login", b),
     register: (b: { email: string; password: string; firstName: string; lastName: string; referralCode?: string; remember?: boolean }) => post<{ verify: true; email: string }>("/auth/register", b),

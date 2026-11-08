@@ -4,7 +4,8 @@
 // Word ids are URL slugs (/word/friend) and the keys stored in WordProgress: never rename one that
 // users have progress on.
 
-export type WordItem = { id: string; english: string; emoji: string; photo: string };
+/** `examples`: optional English sentences (up to 3) written by an admin; the AI translates them and writes the rest. */
+export type WordItem = { id: string; english: string; emoji: string; photo: string; examples?: string[] };
 export type WordUnit = { number: number; title: string; words: WordItem[] };
 
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');

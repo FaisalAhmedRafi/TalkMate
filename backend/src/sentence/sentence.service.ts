@@ -71,6 +71,7 @@ export class SentenceService {
     const found = findSkill(dto.skillId);
     if (!found) throw new NotFoundException('Unknown skill.');
     const system = sessionSystem(found.unit, found.skill, learner(dto));
+    const want = found.skill.sentences?.length || SENTENCES_PER_SESSION; // an admin may have written fewer than 5
 
     let best: { sentence: string; translation: string; note: string }[] = [];
     for (let attempt = 0; attempt < 2; attempt++) {
@@ -84,12 +85,12 @@ export class SentenceService {
       const items = raw
         .map((i: any) => ({ sentence: str(i?.sentence, 300), translation: str(i?.translation, 300), note: str(i?.note, 300) }))
         .filter((i) => i.sentence && !seen.has(i.sentence.toLowerCase()) && !!seen.add(i.sentence.toLowerCase()))
-        .slice(0, SENTENCES_PER_SESSION);
+        .slice(0, want);
       if (items.length > best.length) best = items;
-      if (best.length === SENTENCES_PER_SESSION) break;
+      if (best.length === want) break;
     }
     // Free models sometimes return fewer than asked; 3 or more is still a usable session.
-    if (best.length < 3) throw new BadGatewayException('The AI returned an unreadable answer. Please try again.');
+    if (best.length < Math.min(3, want)) throw new BadGatewayException('The AI returned an unreadable answer. Please try again.');
     return { skillId: found.skill.id, title: found.skill.title, items: best };
   }
 

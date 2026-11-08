@@ -5,7 +5,7 @@ import { SentenceShell } from "@/components/sentence/SentenceShell";
 import { usePhoto } from "@/components/photo/PhotoProvider";
 import { ErrorText } from "@/components/Modal";
 
-// Photo Mode home: units of 8 stars (2 rows of 4). Each star is one photo to describe.
+// Photo Mode home: units of 12 stars (2 rows of 6). Each star is one photo to describe.
 export default function PhotoUnitsPage() {
   const { units, unitsError, reloadUnits } = usePhoto();
   const percent = units?.percent ?? 0;
@@ -34,8 +34,8 @@ export default function PhotoUnitsPage() {
             <span className="absolute -top-3 right-4 rounded-full border border-indigo-900 bg-[#16161c] px-2.5 py-0.5 text-xs font-bold">
               {done}<span className="font-normal text-white/30">/{u.photos.length}</span>
             </span>
-            {/* 4 stars per row, each tile the same size as a Word Mode tile (one sixth of the row) */}
-            <div className="grid justify-center gap-2" style={{ gridTemplateColumns: "repeat(4, calc((100% - 2.5rem) / 6))" }}>
+            {/* 6 stars per row, each tile the same size as a Word Mode tile (one sixth of the row) */}
+            <div className="grid justify-center gap-2" style={{ gridTemplateColumns: "repeat(6, calc((100% - 2.5rem) / 6))" }}>
               {u.photos.map((p, i) => (
                 <Link
                   key={p.id}

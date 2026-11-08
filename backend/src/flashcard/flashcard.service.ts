@@ -5,7 +5,7 @@ import { Learner } from '../ai/prompts';
 import { PrismaService } from '../prisma/prisma.module';
 import { ProgressService } from '../progress/progress.service';
 import { WordImage, WordImageService } from '../word/word.images';
-import { CARDS_PER_DECK, FLASH_TOPICS, findTopic, FlashTopic } from './flashcard.catalog';
+import { CARDS_PER_DECK, deckSize, FLASH_TOPICS, findTopic, FlashTopic } from './flashcard.catalog';
 import { FlashCompleteDto, FlashDeckDto, FlashMarkDto } from './flashcard.dto';
 import { deckSystem } from './flashcard.prompts';
 
@@ -81,7 +81,7 @@ export class FlashcardService {
     let reviewCount = 0;
     const topics = FLASH_TOPICS.map((t, i) => {
       const r = byId.get(t.id);
-      const total = r ? asCards(r.cards).length || CARDS_PER_DECK : CARDS_PER_DECK;
+      const total = r ? asCards(r.cards).length || deckSize(t) : deckSize(t);
       const status = cleanStatus(r?.status, total);
       const flags = cleanFlags(r?.flagged, total);
       reviewCount += status.filter((s, k) => s === 'learning' || flags[k]).length;
@@ -186,6 +186,8 @@ export class FlashcardService {
 
   /** Ask the AI for CARDS_PER_DECK cards. Later attempts only ask for what is still missing, so the deck ends with exactly 15. */
   private async generate(topic: FlashTopic, l: Learner): Promise<Omit<StoredCard, 'image'>[]> {
+    const size = deckSize(topic);
+    if (topic.words?.length) return this.generateFixed(topic, l);
     const cards: Omit<StoredCard, 'image'>[] = [];
     const seen = new Set<string>();
     for (let attempt = 0; attempt < 3 && cards.length < CARDS_PER_DECK; attempt++) {
@@ -202,7 +204,24 @@ export class FlashcardService {
         if (!seen.has(key) && cards.length < CARDS_PER_DECK) { seen.add(key); cards.push(c); }
       }
     }
-    if (cards.length < MIN_CARDS) throw new BadGatewayException('The AI returned an unreadable deck. Please try again.');
+    if (cards.length < Math.min(MIN_CARDS, size)) throw new BadGatewayException('The AI returned an unreadable deck. Please try again.');
     return cards;
+  }
+
+  /** The admin chose the words: the AI only translates them. Each attempt asks for the whole list; the most complete answer wins. */
+  private async generateFixed(topic: FlashTopic, l: Learner): Promise<Omit<StoredCard, 'image'>[]> {
+    const size = deckSize(topic);
+    let best: Omit<StoredCard, 'image'>[] = [];
+    for (let attempt = 0; attempt < 3 && best.length < size; attempt++) {
+      const text = await this.or.complete(
+        [{ role: 'system', content: deckSystem(topic, l) }, { role: 'user', content: 'Generate them now.' }],
+        { temperature: 0.4, maxTokens: 2600 },
+      );
+      const seen = new Set<string>();
+      const cards = parseCards(parseJson(text)).filter((c) => !seen.has(c.term.toLowerCase()) && !!seen.add(c.term.toLowerCase())).slice(0, size);
+      if (cards.length > best.length) best = cards;
+    }
+    if (best.length < Math.max(1, size - 2)) throw new BadGatewayException('The AI returned an unreadable deck. Please try again.');
+    return best;
   }
 }

@@ -6,9 +6,10 @@
 // learn about the database.
 
 import { BadRequestException } from '@nestjs/common';
+import { createHash } from 'crypto';
 import { CHARACTERS, Character, CharacterKind } from '../characters/characters.catalog';
 import { DEBATE_TOPICS } from '../debate/debate.catalog';
-import { DIALOGUE_TOPICS } from '../dialogue/dialogue.catalog';
+import { DIALOGUE_TOPICS, TURNS_PER_DIALOGUE } from '../dialogue/dialogue.catalog';
 import { SENTENCE_PHOTO } from '../explore/photo-queries';
 import { FLASH_TOPICS } from '../flashcard/flashcard.catalog';
 import { PHOTO_UNITS } from '../photo/photo.catalog';
@@ -61,6 +62,62 @@ function idFrom(label: string, v: string): string {
   const id = slug(v).slice(0, 60);
   return id || fail(`${label} needs at least one letter or digit (a-z, 0-9) to build its web address.`);
 }
+
+
+/** A list typed one item per line (or sent as an array). Empty is fine unless `min` > 0 and something was entered. */
+function lines(v: unknown, label: string, min: number, max: number, maxLen: number): string[] {
+  const list = (Array.isArray(v) ? v : typeof v === 'string' ? v.split(/\r?\n/) : [])
+    .map((x) => (typeof x === 'string' ? x.trim().replace(/\s+/g, ' ') : ''))
+    .filter(Boolean);
+  if (list.length === 0) return [];
+  if (list.length < min || list.length > max) fail(`${label}: give ${min} to ${max} lines, one per line (or leave it empty to let the AI write them).`);
+  if (list.some((x) => x.length > maxLen)) fail(`${label}: each line can be up to ${maxLen} characters.`);
+  return list;
+}
+
+/** "Partner: ..." / "You: ..." lines (or an array of { partner, you }) into 3-5 turns. Empty means "let the AI write it". */
+export type ScriptTurn = { partner: string; you: string };
+function script(v: unknown): ScriptTurn[] {
+  if (Array.isArray(v) && v.every((t) => t && typeof t === 'object')) {
+    const turns = v.map((t: any) => ({ partner: str(t.partner, 'Partner line', 240), you: str(t.you, 'Your line', 240) }));
+    return checkTurns(turns);
+  }
+  const rows = (typeof v === 'string' ? v.split(/\r?\n/) : []).map((l) => l.trim()).filter(Boolean);
+  if (rows.length === 0) return [];
+  const turns: ScriptTurn[] = [];
+  rows.forEach((l, i) => {
+    const m = /^(partner|you)\s*:\s*(.+)$/i.exec(l);
+    if (!m) return fail(`Script line ${i + 1} must start with "Partner:" or "You:".`);
+    const role = m[1].toLowerCase();
+    if (role === 'partner') { if (i % 2 !== 0) fail(`Script line ${i + 1}: lines must alternate Partner, You, Partner, You.`); turns.push({ partner: m[2].trim(), you: '' }); }
+    else { if (i % 2 !== 1) fail(`Script line ${i + 1}: lines must alternate Partner, You, Partner, You.`); turns[turns.length - 1].you = m[2].trim(); }
+  });
+  return checkTurns(turns);
+}
+function checkTurns(turns: ScriptTurn[]): ScriptTurn[] {
+  if (turns.length < 3 || turns.length > TURNS_PER_DIALOGUE || turns.some((t) => !t.partner || !t.you)) {
+    fail(`Script: write 3 to ${TURNS_PER_DIALOGUE} turns, each a "Partner:" line followed by a "You:" line.`);
+  }
+  return turns;
+}
+
+/** Optional course id (see COURSES in frontend/lib/courses.ts): the element is added to that course's Learn path. */
+function courseId(v: unknown): string {
+  const s = typeof v === 'string' ? v.trim() : '';
+  if (!s) return '';
+  if (!/^[a-z0-9-]{1,60}$/.test(s)) fail('Course is not valid.');
+  return s;
+}
+
+// Elements that asked to be part of a course, kept in step with the live catalogs (see courseItems()).
+export type CourseItem = { mode: 'sentence' | 'word' | 'dialogue'; id: string; title: string; course: string };
+const courseLinks = new Map<string, CourseItem>();
+const link = (mode: CourseItem['mode'], d: { id: string; course?: string }, title: string) => {
+  if (d.course) courseLinks.set(`${mode}:${d.id}`, { mode, id: d.id, title, course: d.course });
+};
+const unlink = (mode: CourseItem['mode']) => { for (const k of [...courseLinks.keys()]) if (k.startsWith(`${mode}:`)) courseLinks.delete(k); };
+export const courseItems = (): CourseItem[] => [...courseLinks.values()];
+const rev = (d: unknown) => createHash('md5').update(JSON.stringify(d)).digest('hex').slice(0, 8);
 
 /** Existing unit number, or the next free one (which then needs a title). */
 function resolveUnit(raw: unknown, numbers: number[], titleRaw: unknown, needsTitle: boolean): { unit: number; unitTitle?: string } {
@@ -121,16 +178,21 @@ export const DEFS: Record<AdminMode, Def> = {
     normalize: (raw) => {
       const title = str(raw?.title, 'Title', 80);
       const u = resolveUnit(raw?.unit, SENTENCE_UNITS.map((x) => x.number), raw?.unitTitle, true);
-      return { id: idFrom('Title', title), ...u, title, emoji: emoji(raw?.emoji), description: text(raw?.description, 'Description', 200), photo: str(raw?.photo, 'Photo search words', 80, false) };
+      return {
+        id: idFrom('Title', title), ...u, title, emoji: emoji(raw?.emoji), description: text(raw?.description, 'Description', 200), photo: str(raw?.photo, 'Photo search words', 80, false),
+        sentences: lines(raw?.sentences, 'Sentences', 3, 5, 200), course: courseId(raw?.course),
+      };
     },
     add: (d) => {
       const u = unitFor(SENTENCE_UNITS, 'sentence', d, () => ({ number: d.unit, title: d.unitTitle || `Unit ${d.unit}`, skills: [] }));
-      u.skills.push({ id: d.id, title: d.title, emoji: d.emoji, description: d.description });
+      u.skills.push({ id: d.id, title: d.title, emoji: d.emoji, description: d.description, ...(d.sentences?.length ? { sentences: d.sentences } : {}) });
       if (d.photo) SENTENCE_PHOTO[d.id] = d.photo;
+      link('sentence', d, d.title);
       customSentence.add(d.id);
     },
     clear: () => {
       for (const id of customSentence) delete SENTENCE_PHOTO[id];
+      unlink('sentence');
       removeFromUnits(SENTENCE_UNITS, 'sentence', (u) => u.skills, (k) => customSentence.has(k.id));
       customSentence.clear();
     },
@@ -144,14 +206,17 @@ export const DEFS: Record<AdminMode, Def> = {
     normalize: (raw) => {
       const english = str(raw?.english, 'English word', 60);
       const u = resolveUnit(raw?.unit, WORD_UNITS.map((x) => x.number), raw?.unitTitle, true);
-      return { id: idFrom('English word', english), ...u, english, emoji: emoji(raw?.emoji), photo: str(raw?.photo, 'Photo search words', 80, false) || english.replace(/^to /i, '') };
+      return { id: idFrom('English word', english), ...u, english, emoji: emoji(raw?.emoji), photo: str(raw?.photo, 'Photo search words', 80, false) || english.replace(/^to /i, ''),
+        examples: lines(raw?.examples, 'Example sentences', 1, 3, 200), course: courseId(raw?.course),
+      };
     },
     add: (d) => {
       const u = unitFor(WORD_UNITS, 'word', d, () => ({ number: d.unit, title: d.unitTitle || `Unit ${d.unit}`, words: [] }));
-      u.words.push({ id: d.id, english: d.english, emoji: d.emoji, photo: d.photo });
+      u.words.push({ id: d.id, english: d.english, emoji: d.emoji, photo: d.photo, ...(d.examples?.length ? { examples: d.examples } : {}) });
+      link('word', d, d.english);
       customWord.add(d.id);
     },
-    clear: () => { removeFromUnits(WORD_UNITS, 'word', (u) => u.words, (w) => customWord.has(w.id)); customWord.clear(); },
+    clear: () => { unlink('word'); removeFromUnits(WORD_UNITS, 'word', (u) => u.words, (w) => customWord.has(w.id)); customWord.clear(); },
     rows: (isCustom) => WORD_UNITS.flatMap((u) => u.words.map((w) => ({
       id: w.id, title: w.english, sub: `photo: ${w.photo}`, emoji: w.emoji, group: `Unit ${u.number} · ${u.title}`, custom: isCustom(w.id),
     }))),
@@ -161,9 +226,9 @@ export const DEFS: Record<AdminMode, Def> = {
   flashcards: {
     normalize: (raw) => {
       const title = str(raw?.title, 'Title', 60);
-      return { id: idFrom('Title', title), title, emoji: emoji(raw?.emoji), photo: str(raw?.photo, 'Cover photo search words', 80), hint: text(raw?.hint, 'Hint (what the 15 words should be)', 240) };
+      return { id: idFrom('Title', title), title, emoji: emoji(raw?.emoji), photo: str(raw?.photo, 'Cover photo search words', 80), hint: text(raw?.hint, 'Hint (what the 15 words should be)', 240), words: lines(raw?.words, 'Words', 5, 15, 60) };
     },
-    add: (d) => { FLASH_TOPICS.push({ id: d.id, title: d.title, emoji: d.emoji, photo: d.photo, hint: d.hint }); customFlash.add(d.id); },
+    add: (d) => { FLASH_TOPICS.push({ id: d.id, title: d.title, emoji: d.emoji, photo: d.photo, hint: d.hint, ...(d.words?.length ? { words: d.words } : {}) }); customFlash.add(d.id); },
     clear: () => dropFrom(FLASH_TOPICS, customFlash),
     rows: (isCustom) => FLASH_TOPICS.map((t) => ({ id: t.id, title: t.title, sub: t.hint, emoji: t.emoji, group: '15 cards', custom: isCustom(t.id) })),
     ids: () => FLASH_TOPICS.map((t) => t.id),
@@ -175,13 +240,18 @@ export const DEFS: Record<AdminMode, Def> = {
       return {
         id: idFrom('Title', title), title, emoji: emoji(raw?.emoji), photo: str(raw?.photo, 'Cover photo search words', 80),
         partner: str(raw?.partner, 'Partner', 40), partnerEmoji: emoji(raw?.partnerEmoji), setting: text(raw?.setting, 'Setting', 300),
+        script: script(raw?.script), course: courseId(raw?.course),
       };
     },
     add: (d) => {
-      DIALOGUE_TOPICS.push({ id: d.id, title: d.title, emoji: d.emoji, photo: d.photo, partner: d.partner, partnerEmoji: d.partnerEmoji, setting: d.setting });
+      DIALOGUE_TOPICS.push({
+        id: d.id, title: d.title, emoji: d.emoji, photo: d.photo, partner: d.partner, partnerEmoji: d.partnerEmoji, setting: d.setting,
+        ...(d.script?.length ? { script: d.script } : {}), rev: rev(d), // rev: a changed text must not serve the old cached script
+      });
+      link('dialogue', d, d.title);
       customDialogue.add(d.id);
     },
-    clear: () => dropFrom(DIALOGUE_TOPICS, customDialogue),
+    clear: () => { unlink('dialogue'); dropFrom(DIALOGUE_TOPICS, customDialogue); },
     rows: (isCustom) => DIALOGUE_TOPICS.map((t) => ({ id: t.id, title: t.title, sub: `${t.partner} · ${t.setting}`, emoji: t.emoji, group: t.partner, custom: isCustom(t.id) })),
     ids: () => DIALOGUE_TOPICS.map((t) => t.id),
   },
@@ -204,9 +274,12 @@ export const DEFS: Record<AdminMode, Def> = {
       if (!CHARACTER_KINDS.includes(kind as CharacterKind)) fail(`Kind must be one of: ${CHARACTER_KINDS.join(', ')}.`);
       return { id: idFrom('Name', name), name, emoji: emoji(raw?.emoji), hue: int(raw?.hue ?? 210, 'Colour hue', 0, 360), kind, about: text(raw?.about, 'About (persona)', 600) };
     },
-    add: (d) => { CHARACTERS.push({ id: d.id, name: d.name, emoji: d.emoji, hue: d.hue, kind: d.kind, about: d.about } as Character); customCharacter.add(d.id); },
+    add: (d, ctx) => {
+      CHARACTERS.push({ id: d.id, name: d.name, emoji: d.emoji, hue: d.hue, kind: d.kind, about: d.about, ...(d.file ? { portrait: ctx.imageUrl(d.file) } : {}) } as Character);
+      customCharacter.add(d.id);
+    },
     clear: () => dropFrom(CHARACTERS, customCharacter),
-    rows: (isCustom) => CHARACTERS.map((c) => ({ id: c.id, title: c.name, sub: c.about, emoji: c.emoji, group: c.kind, custom: isCustom(c.id) })),
+    rows: (isCustom) => CHARACTERS.map((c) => ({ id: c.id, title: c.name, sub: c.about, emoji: c.emoji, group: c.kind, custom: isCustom(c.id), image: c.portrait ?? null })),
     ids: () => CHARACTERS.map((c) => c.id),
   },
 

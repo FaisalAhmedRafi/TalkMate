@@ -13,6 +13,9 @@ export type DialogueTopic = {
   partnerEmoji: string;
   /** prompt context: where the conversation happens */
   setting: string;
+  /** optional English script written by an admin (the AI translates it); `rev` changes whenever it is edited, to bypass the script cache */
+  script?: { partner: string; you: string }[];
+  rev?: string;
 };
 
 export const DIALOGUE_TOPICS: DialogueTopic[] = [

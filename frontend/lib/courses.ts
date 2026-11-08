@@ -4,7 +4,10 @@
 // The ids must exist in the backend catalogs (word.catalog.ts, sentence.catalog.ts, dialogue.catalog.ts).
 
 export type CourseGroup = "level" | "lifestyle" | "professional";
-export type Unit = { title: string; word: string; sentence: string; dialogue: string };
+/** A unit has up to three exercises. Built-in units have all three; units made from elements added in the Admin panel may miss one. */
+export type Unit = { title: string; word: string | null; sentence: string | null; dialogue: string | null };
+/** An element added in the Admin panel that picked a course (from GET /content/course-items). */
+export type CourseItem = { mode: "sentence" | "word" | "dialogue"; id: string; title: string; course: string };
 export type Course = {
   id: string; title: string; desc: string; group: CourseGroup; emoji: string;
   /** CEFR badge, level courses only */
@@ -115,8 +118,26 @@ export const titleize = (id: string) => { const t = id.replace(/-/g, " "); retur
 
 const UNITS_PER_COURSE = 10;
 
-/** The units of a course. Courses without a hand-written path get one built from the existing Word, Sentence and Dialogue content. */
-export function pathFor(course: Course): Unit[] {
+/**
+ * Units for the elements admins added to this course, appended after the built-in path: the 1st added word, sentence and
+ * dialogue make one unit, the 2nd of each the next, and so on (a unit simply has fewer exercises when one kind runs out).
+ */
+export function extraUnits(course: Course, extras: CourseItem[]): Unit[] {
+  const mine = extras.filter((e) => e.course === course.id);
+  const by = (m: CourseItem["mode"]) => mine.filter((e) => e.mode === m);
+  const [w, s, d] = [by("word"), by("sentence"), by("dialogue")];
+  return Array.from({ length: Math.max(w.length, s.length, d.length) }, (_, i) => ({
+    title: d[i]?.title ?? s[i]?.title ?? titleize(w[i].title),
+    word: w[i]?.id ?? null, sentence: s[i]?.id ?? null, dialogue: d[i]?.id ?? null,
+  }));
+}
+
+/** The units of a course. Courses without a hand-written path get one built from the existing Word, Sentence and Dialogue content; admin-added elements follow. */
+export function pathFor(course: Course, extras: CourseItem[] = []): Unit[] {
+  return [...basePath(course), ...extraUnits(course, extras)];
+}
+
+function basePath(course: Course): Unit[] {
   if (course.units) return course.units;
   const k = Math.max(0, COURSES.findIndex((c) => c.id === course.id));
   const hinted = course.dialogues ?? [];

@@ -15,6 +15,8 @@ export type Character = {
   kind: CharacterKind;
   /** who they are, how they talk and what they like to talk about: the persona the AI plays */
   about: string;
+  /** picture URL uploaded in the Admin panel; wins over the Wikipedia picture */
+  portrait?: string;
 };
 
 export const CHARACTERS: Character[] = [

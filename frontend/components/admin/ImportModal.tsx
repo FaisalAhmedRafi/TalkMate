@@ -35,7 +35,7 @@ export function ImportModal({ info, onClose, onDone }: {
     finally { setBusy(false); }
   }
 
-  const fieldNames = FORMS[info.mode].map((f) => f.key + (f.optional ? "?" : "")).concat(info.mode === "sentence" || info.mode === "word" ? ["unitTitle? (new unit only)"] : []);
+  const fieldNames = FORMS[info.mode].filter((f) => f.kind !== "image" && f.kind !== "portrait").map((f) => f.key + (f.optional ? "?" : "")).concat(info.mode === "sentence" || info.mode === "word" ? ["unitTitle? (new unit only)"] : []);
 
   return (
     <Modal onClose={onClose} label={`Import ${info.label} elements`} wide>

@@ -6,17 +6,18 @@ import { BookOpen, Check, ChevronDown } from "lucide-react";
 import { Modal } from "@/components/Modal";
 import { CourseThumb, useCourseCovers } from "@/components/CoursesView";
 import { api, type DialogueTopicInfo, type SentenceSkill, type WordStar } from "@/lib/api";
-import { COURSES, COURSE_GROUPS, pathFor, titleize, type Course, type Unit } from "@/lib/courses";
+import { COURSES, COURSE_GROUPS, pathFor, titleize, type Course, type CourseItem, type Unit } from "@/lib/courses";
 
-type Step = { n: 1 | 2 | 3; mode: "Word Mode" | "Sentence Mode" | "Dialogue Mode"; href: string; emoji: string; cover?: string | null; title: string; done: boolean };
+type Step = { n: number; mode: "Word Mode" | "Sentence Mode" | "Dialogue Mode"; href: string; emoji: string; cover?: string | null; title: string; done: boolean };
 
-/** Learn: the learning path of the selected course. Each unit is three exercises (Word, Sentence and Dialogue Mode). */
+/** Learn: the learning path of the selected course. Each unit is up to three exercises (Word, Sentence and Dialogue Mode). */
 export function LearnView({ course, premium, onSelectCourse, onLocked }: {
   course: Course; premium: boolean; onSelectCourse: (c: Course) => void; onLocked: (mode: string) => void;
 }) {
   const [words, setWords] = useState<Record<string, WordStar>>({});
   const [skills, setSkills] = useState<Record<string, SentenceSkill>>({});
   const [topics, setTopics] = useState<Record<string, DialogueTopicInfo>>({});
+  const [extras, setExtras] = useState<CourseItem[]>([]); // elements added in the Admin panel that belong to a course
   const [unitCovers, setUnitCovers] = useState<Record<string, string | null>>({});
   const courseCovers = useCourseCovers(); // photos for the course picker, same ones as the Courses tab
   const [picker, setPicker] = useState(false);
@@ -32,11 +33,12 @@ export function LearnView({ course, premium, onSelectCourse, onLocked }: {
       if (s.status === "fulfilled") setSkills(Object.fromEntries(s.value.units.flatMap((x) => x.skills).map((x) => [x.id, x])));
       if (d.status === "fulfilled") setTopics(Object.fromEntries(d.value.topics.map((x) => [x.id, x])));
     });
+    api.content.courseItems().then((r) => { if (live) setExtras(r.items); }).catch(() => {}); // no extras is fine
     return () => { live = false; };
   }, []);
 
   // One photo per unit, searched by the unit title and shared by its three exercises (12 titles max per call).
-  const titlesKey = pathFor(course).map((u) => u.title).join("|");
+  const titlesKey = pathFor(course, extras).map((u) => u.title).join("|");
   useEffect(() => {
     let live = true;
     setUnitCovers({});
@@ -60,18 +62,18 @@ export function LearnView({ course, premium, onSelectCourse, onLocked }: {
     return () => { document.removeEventListener("mousedown", off); window.removeEventListener("keydown", esc); };
   }, [picker]);
 
-  const units = useMemo(() => pathFor(course).map((u: Unit) => {
-    const w = words[u.word], s = skills[u.sentence], d = topics[u.dialogue];
+  const units = useMemo(() => pathFor(course, extras).map((u: Unit) => {
+    const w = u.word ? words[u.word] : undefined, s = u.sentence ? skills[u.sentence] : undefined, d = u.dialogue ? topics[u.dialogue] : undefined;
     const cover = unitCovers[u.title]; // same photo for all three exercises of the unit
-    const steps: Step[] = [
-      { n: 1, mode: "Word Mode", href: `/word/${u.word}`, emoji: w?.emoji ?? "🃏", cover, title: titleize(u.word), done: !!w?.passed },
-      { n: 2, mode: "Sentence Mode", href: `/sentence/${u.sentence}`, emoji: s?.emoji ?? "🗣️", cover, title: s?.title ?? titleize(u.sentence), done: !!s?.passed },
-      { n: 3, mode: "Dialogue Mode", href: `/dialogue/${u.dialogue}`, emoji: d?.emoji ?? "💭", cover, title: d?.title ?? titleize(u.dialogue), done: !!d?.passed },
-    ];
+    const all: Omit<Step, "n">[] = [];
+    if (u.word) all.push({ mode: "Word Mode", href: `/word/${u.word}`, emoji: w?.emoji ?? "🃏", cover, title: titleize(u.word), done: !!w?.passed });
+    if (u.sentence) all.push({ mode: "Sentence Mode", href: `/sentence/${u.sentence}`, emoji: s?.emoji ?? "🗣️", cover, title: s?.title ?? titleize(u.sentence), done: !!s?.passed });
+    if (u.dialogue) all.push({ mode: "Dialogue Mode", href: `/dialogue/${u.dialogue}`, emoji: d?.emoji ?? "💭", cover, title: d?.title ?? titleize(u.dialogue), done: !!d?.passed });
+    const steps: Step[] = all.map((s, i) => ({ ...s, n: i + 1 }));
     return { title: u.title, steps };
-  }), [course, words, skills, topics, unitCovers]);
+  }), [course, extras, words, skills, topics, unitCovers]);
 
-  const total = units.length * 3;
+  const total = units.reduce((n, u) => n + u.steps.length, 0);
   const done = units.reduce((n, u) => n + u.steps.filter((s) => s.done).length, 0);
   const percent = total ? Math.round((done / total) * 100) : 0;
 
@@ -145,7 +147,7 @@ export function LearnView({ course, premium, onSelectCourse, onLocked }: {
               const cls = "flex w-full items-center gap-4 rounded-xl border border-white/5 bg-[#1f1f27] px-3 py-3 text-left transition-colors hover:border-white/20";
               return (
                 <li key={s.n} className="relative">
-                  {i < 2 && <span aria-hidden="true" className="absolute left-[29px] top-full h-3 w-px bg-white/10" />}
+                  {i < u.steps.length - 1 && <span aria-hidden="true" className="absolute left-[29px] top-full h-3 w-px bg-white/10" />}
                   {premium
                     ? <Link href={s.href} aria-label={`Unit ${ui + 1}, exercise ${s.n}, ${s.mode}${s.done ? ", completed" : ""}`} className={cls}>{row}</Link>
                     : <button onClick={() => onLocked(s.mode)} className={cls}>{row}</button>}

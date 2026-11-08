@@ -5,7 +5,7 @@ import { dirname, join } from 'path';
 import { PrismaService } from '../prisma/prisma.module';
 import { MEDIA_DIR } from '../word/word.images';
 import { ROLEPLAY_CATEGORIES } from '../roleplay/roleplay.catalog';
-import { AdminMode, CHARACTER_KINDS, DEFS, isMode, MODE_LABEL, MODES, nextPhotoId, Row, unitsOf } from './admin.content';
+import { AdminMode, CHARACTER_KINDS, courseItems, DEFS, isMode, MODE_LABEL, MODES, nextPhotoId, Row, unitsOf } from './admin.content';
 
 const MAX_IMPORT = 200;
 const MAX_IMAGE_BYTES = 3_000_000;
@@ -97,15 +97,62 @@ export class AdminService implements OnModuleInit {
     const row = await this.prisma.customContent.findUnique({ where: { mode_itemId: { mode, itemId } } });
     await this.prisma.customContent.deleteMany({ where: { mode, itemId } });
     if (row) this.discardFile(row.data as any);
-    // rebuild this mode from the database so units that only this element created disappear too
+    await this.rebuild(mode); // units that only this element created disappear too
+    return { ok: true, ...this.overviewOf(mode) };
+  }
+
+  /** One added element as the form shows it (lists become one line per entry, a script becomes Partner:/You: lines). */
+  async get(modeRaw: string, itemId: string) {
+    const mode = this.mode(modeRaw);
+    const row = await this.prisma.customContent.findUnique({ where: { mode_itemId: { mode, itemId } } });
+    if (!row) {
+      if (DEFS[mode].ids().includes(itemId)) throw new BadRequestException('Built-in elements cannot be edited here.');
+      throw new NotFoundException('Unknown element.');
+    }
+    return { mode, id: itemId, item: this.formOf(row.data as any) };
+  }
+
+  /**
+   * Change an element that was added from the panel. Its id (the web address and the key of learners' progress) never changes,
+   * so progress keeps counting. A photo or portrait is kept unless a new picture is sent (or `removeImage` for a portrait).
+   */
+  async update(modeRaw: string, itemId: string, raw: any) {
+    const mode = this.mode(modeRaw);
+    if (!this.custom.get(mode)!.has(itemId)) {
+      if (DEFS[mode].ids().includes(itemId)) throw new BadRequestException('Built-in elements cannot be edited here.');
+      throw new NotFoundException('Unknown element.');
+    }
+    const row = await this.prisma.customContent.findUnique({ where: { mode_itemId: { mode, itemId } } });
+    if (!row) throw new NotFoundException('Unknown element.');
+    const old = row.data as any;
+    const data = await this.prepare(mode, raw, old);
+    await this.prisma.customContent.update({ where: { mode_itemId: { mode, itemId } }, data: { data } });
+    if (old.file && old.file !== data.file) this.discardFile(old);
+    await this.rebuild(mode);
+    return { ok: true, id: itemId, ...this.overviewOf(mode) };
+  }
+
+  /** What the Learn paths need: every added Word, Sentence or Dialogue element that picked a course. */
+  courseItems() { return { items: courseItems() }; }
+
+  // ---------- helpers ----------
+  /** Rebuild one mode's live catalog from the database. */
+  private async rebuild(mode: AdminMode) {
     DEFS[mode].clear();
     this.custom.get(mode)!.clear();
     const rows = await this.prisma.customContent.findMany({ where: { mode }, orderBy: { createdAt: 'asc' } });
     for (const r of rows) { try { this.attach(mode, r.data as any); } catch (e) { this.log.warn(`Skipped ${mode}/${r.itemId}: ${(e as Error).message}`); } }
-    return { ok: true, ...this.overviewOf(mode) };
   }
 
-  // ---------- helpers ----------
+  private formOf(d: any) {
+    const f: any = { ...d };
+    for (const k of ['sentences', 'examples', 'words']) if (Array.isArray(f[k])) f[k] = f[k].join('\n');
+    if (Array.isArray(f.script)) f.script = f.script.map((t: any) => `Partner: ${t.partner}\nYou: ${t.you}`).join('\n');
+    if (f.file) f.imageUrl = this.imageUrl(f.file);
+    delete f.image; delete f.file; // the stored data URL is large and not needed by the form
+    return f;
+  }
+
   private overviewOf(mode: AdminMode) {
     return { total: DEFS[mode].ids().length, custom: this.custom.get(mode)!.size, units: unitsOf(mode) ?? null };
   }
@@ -116,27 +163,40 @@ export class AdminService implements OnModuleInit {
   }
 
   private attach(mode: AdminMode, data: any) {
-    if (mode === 'photo') this.ensureFile(data);
+    if (data.file) this.ensureFile(data); // photos and character portraits
     DEFS[mode].add(data, { imageUrl: (f) => this.imageUrl(f) });
     this.custom.get(mode)!.add(data.id);
   }
 
-  /** Validate, reject duplicates and (for photos) save the picture; returns the data to store. */
-  private async prepare(mode: AdminMode, raw: any) {
+  /** Validate, reject duplicates and save a picture; returns the data to store. `existing` is set when an element is being edited. */
+  private async prepare(mode: AdminMode, raw: any, existing?: any) {
     if (!raw || typeof raw !== 'object') throw new BadRequestException('Send the element as an object.');
     const data = DEFS[mode].normalize(raw);
-    if (mode === 'photo') {
-      const m = IMAGE_RE.exec(typeof raw.image === 'string' ? raw.image : '');
-      if (!m) throw new BadRequestException('Add a PNG, JPEG or WebP picture.');
-      const buf = Buffer.from(m[2], 'base64');
-      if (buf.length < 100 || buf.length > MAX_IMAGE_BYTES) throw new BadRequestException('The picture must be under 3 MB.');
-      const ext = m[1] === 'jpeg' ? 'jpg' : m[1];
-      data.id = nextPhotoId();
-      data.file = `admin-photos/${data.id}.${ext}`;
-      data.image = raw.image; // kept in the database so the file can be restored if the media folder is wiped
-      this.writeFile(data.file, buf);
-    } else if (DEFS[mode].ids().includes(data.id)) {
+    if (existing) data.id = existing.id; // the id never changes: it keys learners' progress and the web address
+    else if (mode !== 'photo' && DEFS[mode].ids().includes(data.id)) {
       throw new ConflictException(`"${data.id}" already exists in ${MODE_LABEL[mode]} mode. Use a different title.`);
+    }
+    if (existing?.unitTitle && !data.unitTitle && data.unit === existing.unit) data.unitTitle = existing.unitTitle; // keep the title of a unit this element created
+
+    if (mode === 'photo' || mode === 'characters') {
+      const sent = typeof raw.image === 'string' && raw.image !== '';
+      if (!existing && mode === 'photo') data.id = nextPhotoId();
+      if (sent) {
+        const m = IMAGE_RE.exec(raw.image);
+        if (!m) throw new BadRequestException('Add a PNG, JPEG or WebP picture.');
+        const buf = Buffer.from(m[2], 'base64');
+        if (buf.length < 100 || buf.length > MAX_IMAGE_BYTES) throw new BadRequestException('The picture must be under 3 MB.');
+        const ext = m[1] === 'jpeg' ? 'jpg' : m[1];
+        const base = mode === 'photo' ? data.id : `char-${data.id}`;
+        // a replaced picture gets a new file name, so browsers do not keep showing the old one
+        data.file = `admin-photos/${base}${existing?.file || mode === 'characters' ? `-${Date.now().toString(36)}` : ''}.${ext}`;
+        data.image = raw.image; // kept in the database so the file can be restored if the media folder is wiped
+        this.writeFile(data.file, buf);
+      } else if (existing?.file && !(mode === 'characters' && raw.removeImage === true)) {
+        data.file = existing.file; data.image = existing.image;
+      } else if (mode === 'photo') {
+        throw new BadRequestException('Add a PNG, JPEG or WebP picture.');
+      }
     }
     return data;
   }

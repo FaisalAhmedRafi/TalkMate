@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Throttle } from '@nestjs/throttler';
 import { AuthGuard } from '../auth/auth.guard';
@@ -37,8 +37,29 @@ export class AdminController {
   @Post('import')
   import(@Req() req: any, @Body() body: { mode: string; items: unknown }) { return this.admin.import(body?.mode, body?.items, req.user.email); }
 
+  /** One added element, shaped for the edit form */
+  @UseGuards(AdminGuard)
+  @Get('items/:mode/:id')
+  one(@Param('mode') mode: string, @Param('id') id: string) { return this.admin.get(mode, id); }
+
+  /** Change an element added from the panel (its id stays). Body: { item } */
+  @UseGuards(AdminGuard)
+  @Patch('items/:mode/:id')
+  update(@Param('mode') mode: string, @Param('id') id: string, @Body() body: { item: unknown }) { return this.admin.update(mode, id, body?.item); }
+
   /** Delete an element added from the panel */
   @UseGuards(AdminGuard)
   @Delete('items/:mode/:id')
   remove(@Param('mode') mode: string, @Param('id') id: string) { return this.admin.remove(mode, id); }
+}
+
+/** For every learner (Learn tab): the added Word, Sentence and Dialogue elements that belong to a course. */
+@Throttle({ default: { limit: 60, ttl: 60_000 } })
+@Controller('content')
+export class ContentController {
+  constructor(private readonly admin: AdminService) {}
+
+  @UseGuards(AuthGuard)
+  @Get('course-items')
+  courseItems() { return this.admin.courseItems(); }
 }

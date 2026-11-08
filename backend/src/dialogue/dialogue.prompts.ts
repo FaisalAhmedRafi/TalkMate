@@ -8,7 +8,21 @@ const LENGTH: Record<string, string> = {
 };
 
 /** One scripted conversation: the partner speaks first, the learner answers, TURNS_PER_DIALOGUE times. */
+/** The admin wrote the conversation in English: the AI only translates it, turn by turn. */
+const fromScript = (topic: DialogueTopic, l: Learner) =>
+  `You prepare short scripted ${l.targetLanguage} conversations for a ${l.level} learner whose native language is ${l.nativeLanguage}. ` +
+  `Topic: "${topic.title}" (${topic.setting}). The learner talks to a ${topic.partner.toLowerCase()}. ` +
+  `Translate this English conversation into natural ${l.targetLanguage}, keeping the meaning and the order of its ${topic.script!.length} turns. ` +
+  `In every turn the ${topic.partner.toLowerCase()} speaks first (partner), then the learner answers (you). ` +
+  topic.script!.map((t, i) => `Turn ${i + 1}. Partner: ${t.partner} You: ${t.you}`).join(' ') + ' ' +
+  `Use ${LENGTH[l.level] ?? LENGTH.Beginner} where the meaning allows. Every "you" line is read aloud by the learner, so it must be easy to say: ` +
+  `no numbering, no quotation marks, no emojis, no romanization, no brackets, ending with normal punctuation. ` +
+  `partnerTranslation and youTranslation are the lines in ${l.nativeLanguage}. title is a short title in ${l.targetLanguage}. ` +
+  `Return ONLY valid JSON. No markdown, no code fences, no commentary. ` +
+  `Schema: {"title":"","turns":[{"partner":"","partnerTranslation":"","you":"","youTranslation":""}]}`;
+
 export const dialogueSystem = (topic: DialogueTopic, l: Learner) =>
+  topic.script?.length ? fromScript(topic, l) :
   `You write short scripted ${l.targetLanguage} conversations for a ${l.level} learner whose native language is ${l.nativeLanguage}. ` +
   `Topic: "${topic.title}" (${topic.setting}). The learner talks to a ${topic.partner.toLowerCase()}. ` +
   `Write exactly ${TURNS_PER_DIALOGUE} turns. In every turn the ${topic.partner.toLowerCase()} speaks first (partner), then the learner answers (you). ` +
