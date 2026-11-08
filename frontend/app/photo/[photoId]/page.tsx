@@ -11,7 +11,7 @@ import { nextPhotoId, imageToDataUrl, usePhotoId } from "@/lib/photo";
 import { PASS_SCORE } from "@/lib/sentence";
 import { cancelSpeech, createRecognition, speak, supportsSpeechRecognition } from "@/lib/speech";
 
-type Judged = { result: PhotoJudgement; passed: boolean; bestScore: number };
+type Judged = { result: PhotoJudgement; passed: boolean; bestScore: number; description: string };
 
 // One photo: the learner sees the picture, writes (or dictates) a description, and the AI judges it.
 export default function PhotoPage() {
@@ -73,7 +73,7 @@ export default function PhotoPage() {
     try {
       const image = await imageToDataUrl(photo.image);
       const r = await api.photos.judge({ ...learner, photoId, image, description });
-      setJudged({ result: r.result, passed: r.passed, bestScore: r.bestScore });
+      setJudged({ result: r.result, passed: r.passed, bestScore: r.bestScore, description });
       setProgress(r.progress);
       reloadUnits();
     } catch (e) {
@@ -84,6 +84,7 @@ export default function PhotoPage() {
   };
 
   const res = judged?.result;
+  const split = !!(res && judged); // after judging: your input on the left, the AI's output on the right
 
   return (
     <div className="flex min-h-screen flex-col bg-[#222228]">
@@ -93,7 +94,7 @@ export default function PhotoPage() {
         <button onClick={close} aria-label="Close" className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 hover:bg-white/5"><X size={16} /></button>
       </header>
 
-      <main className="mx-auto flex w-full max-w-[684px] flex-1 flex-col px-5 py-6">
+      <main className={`mx-auto flex w-full flex-1 flex-col px-5 py-6 ${split ? "max-w-[1100px]" : "max-w-[684px]"}`}>
         <p className="text-center text-sm font-semibold text-white/90">Describe what you see</p>
 
         {!units && <p className="m-auto text-white/60">Loading…</p>}
@@ -105,20 +106,31 @@ export default function PhotoPage() {
         )}
 
         {photo && (
-          <>
-            <div className="mt-5 overflow-hidden rounded-2xl bg-black/30">
-              {imgFailed ? (
-                <p className="px-6 py-16 text-center text-sm text-white/60">
-                  The picture is missing. Add it as <code>frontend/public{photo.image}</code>.
-                </p>
-              ) : (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={photo.image} alt="Photo to describe" onError={() => setImgFailed(true)} className="max-h-[420px] w-full object-cover" />
+          <div className={split ? "mt-5 grid items-start gap-5 md:grid-cols-2" : ""}>
+            {/* Left: what the learner entered */}
+            <div className={split ? "rounded-2xl border border-white/10 bg-[#1f1f27] p-4" : ""}>
+              {split && <h2 className="text-xs font-bold uppercase tracking-wide text-white/50">Your input</h2>}
+              <div className={`${split ? "mt-3" : "mt-5"} overflow-hidden rounded-2xl bg-black/30`}>
+                {imgFailed ? (
+                  <p className="px-6 py-16 text-center text-sm text-white/60">
+                    The picture is missing. Add it as <code>frontend/public{photo.image}</code>.
+                  </p>
+                ) : (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={photo.image} alt="Photo to describe" onError={() => setImgFailed(true)} className={`${split ? "max-h-[260px]" : "max-h-[420px]"} w-full object-cover`} />
+                )}
+              </div>
+              {split && judged && (
+                <div className="mt-4">
+                  <h3 className="text-xs font-semibold text-white/50">Your description</h3>
+                  <p className="mt-2 whitespace-pre-wrap break-words rounded-xl bg-white/5 p-3 text-sm text-white/90">{judged.description}</p>
+                </div>
               )}
             </div>
 
             {res && judged && (
-              <section className="mt-5 rounded-2xl border border-white/10 bg-[#1f1f27] p-5" aria-label="Feedback">
+              <section className="rounded-2xl border border-white/10 bg-[#1f1f27] p-5" aria-label="AI feedback">
+                <h2 className="mb-4 text-xs font-bold uppercase tracking-wide text-white/50">AI output</h2>
                 <div className="flex items-center justify-between">
                   <div className="flex gap-1" aria-label={`Score ${res.score} out of 5`}>
                     {[1, 2, 3, 4, 5].map((n) => (
@@ -179,7 +191,7 @@ export default function PhotoPage() {
                 </div>
               </section>
             )}
-          </>
+          </div>
         )}
       </main>
 
