@@ -89,7 +89,8 @@ export const SENTENCE_UNITS: SentenceUnit[] = [
   },
 ];
 
-export const TOTAL_SKILLS = SENTENCE_UNITS.reduce((n, u) => n + u.skills.length, 0);
+// A function, not a constant: the admin panel adds skills at runtime (see src/admin).
+export const totalSkills = () => SENTENCE_UNITS.reduce((n, u) => n + u.skills.length, 0);
 
 export function findSkill(id: string): { unit: SentenceUnit; skill: SentenceSkill } | null {
   for (const unit of SENTENCE_UNITS) {

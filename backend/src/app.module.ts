@@ -3,6 +3,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AccountModule } from './account/account.module';
+import { AdminModule } from './admin/admin.module';
 import { AiModule } from './ai/ai.module';
 import { AuthModule } from './auth/auth.module';
 import { CallModule } from './call/call.module';
@@ -35,6 +36,7 @@ class HealthController {
     AuthModule,
     ProgressModule,
     AccountModule,
+    AdminModule,
     AiModule,
     SentenceModule,
     WordModule,

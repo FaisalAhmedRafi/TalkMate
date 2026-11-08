@@ -5,7 +5,7 @@ import { Learner } from '../ai/prompts';
 import { PrismaService } from '../prisma/prisma.module';
 import { ProgressService } from '../progress/progress.service';
 import { PASS_SCORE } from '../sentence/sentence.service';
-import { findWord, TOTAL_WORDS, WORD_UNITS, WordItem, WordUnit } from './word.catalog';
+import { findWord, totalWords, WORD_UNITS, WordItem, WordUnit } from './word.catalog';
 import { WordCompleteDto, WordSaveDto, WordStartDto } from './word.dto';
 import { WordImage, WordImageService } from './word.images';
 import { lessonSystem, SENTENCES_PER_WORD } from './word.prompts';
@@ -82,9 +82,9 @@ export class WordService {
     const passed = rows.filter((r) => r.passed && findWord(r.wordId)).length;
     return {
       language,
-      percent: Math.round((passed / TOTAL_WORDS) * 100),
+      percent: Math.round((passed / totalWords()) * 100),
       passed,
-      total: TOTAL_WORDS,
+      total: totalWords(),
       units: WORD_UNITS.map((u) => ({
         number: u.number,
         title: u.title,
@@ -190,7 +190,7 @@ export class WordService {
 
   private async percent(userId: string, language: string) {
     const rows = await this.prisma.wordProgress.findMany({ where: { userId, language, passed: true }, select: { wordId: true } });
-    return Math.round((rows.filter((r) => findWord(r.wordId)).length / TOTAL_WORDS) * 100);
+    return Math.round((rows.filter((r) => findWord(r.wordId)).length / totalWords()) * 100);
   }
 
   private view(item: WordItem, lesson: Lesson, step: number, scores: (number | null)[], resumed: boolean, image: WordImage | null) {

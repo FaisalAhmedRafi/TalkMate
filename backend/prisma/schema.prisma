@@ -294,3 +294,18 @@ model SupportMessage {
 
   @@index([createdAt])
 }
+
+/// An element added from the admin panel (/admin) on top of the built-in catalogs in src/<mode>/<mode>.catalog.ts.
+/// `mode` is sentence | word | flashcards | dialogue | debate | characters | roleplay | photo; `itemId` is the same URL slug
+/// the built-in items use (so it keys the learners' progress rows). `data` is the validated item (see src/admin/admin.content.ts).
+model CustomContent {
+  id        String   @id @default(cuid())
+  mode      String
+  itemId    String
+  data      Json
+  createdBy String? // email of the admin who added it
+  createdAt DateTime @default(now())
+
+  @@unique([mode, itemId])
+  @@index([mode, createdAt])
+}

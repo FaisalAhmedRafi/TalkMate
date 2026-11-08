@@ -4,7 +4,7 @@ import { Learner } from '../ai/prompts';
 import { PrismaService } from '../prisma/prisma.module';
 import { ProgressService } from '../progress/progress.service';
 import { PASS_SCORE } from '../sentence/sentence.service';
-import { findPhoto, PHOTO_UNITS, TOTAL_PHOTOS } from './photo.catalog';
+import { findPhoto, PHOTO_UNITS, totalPhotos } from './photo.catalog';
 import { PhotoJudgeDto } from './photo.dto';
 import { judgeSystem } from './photo.prompts';
 
@@ -74,7 +74,7 @@ export class PhotoService {
       language,
       percent: await this.percent(userId, language),
       passed: rows.filter((r) => r.passed && findPhoto(r.photoId)).length,
-      total: TOTAL_PHOTOS,
+      total: totalPhotos(),
       units: PHOTO_UNITS.map((u) => ({
         number: u.number,
         photos: u.photos.map((x) => {
@@ -130,6 +130,6 @@ export class PhotoService {
 
   private async percent(userId: string, language: string) {
     const rows = await this.prisma.photoProgress.findMany({ where: { userId, language, passed: true }, select: { photoId: true } });
-    return Math.round((rows.filter((r) => findPhoto(r.photoId)).length / TOTAL_PHOTOS) * 100);
+    return Math.round((rows.filter((r) => findPhoto(r.photoId)).length / totalPhotos()) * 100);
   }
 }

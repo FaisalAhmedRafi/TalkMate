@@ -2,7 +2,7 @@
 
 Guidance for working in this repository.
 
-**Last audited against the code: 2026-11-08.** The repository map, Prisma schema and migrations, every controller and DTO, the dashboard, Account, Chat, Call and Debate code were re-checked on that date. The internals of Sentence, Word, Flashcards, Characters, Roleplay, Dialogue and Photo were not re-read line by line; their sections below still describe the earlier version, which the routes, models and catalogs confirm. When you change code, update the matching section here in the same change.
+**Last audited against the code: 2026-11-08.** The repository map, Prisma schema and migrations, every controller and DTO, the dashboard, Account, Chat, Call and Debate code were re-checked on that date. The internals of Sentence, Word, Flashcards, Characters, Roleplay, Dialogue and Photo were not re-read line by line; their sections below still describe the earlier version, which the routes, models and catalogs confirm. When you change code, update the matching section here in the same change. **Added after that audit (2026-11-08): the Admin panel** (`/admin`, `src/admin`, table `CustomContent`); its sections are current.
 
 ## What this is
 
@@ -25,6 +25,8 @@ TalkMate is an AI language-practice web app (a Talkpal-style clone; the UI even 
 **Courses and Learn are dashboard tabs** (frontend only, no backend or DB change): Courses is a grid of 32 courses, and picking one makes it the selected course and opens Learn, a learning path of units whose three exercises open Word, Sentence and Dialogue Mode. See "Courses and Learn" below.
 
 **Account is a dashboard tab**, not a modal: Profile, Personalization, Settings (translation language, target language, level), demo Subscriptions, Refer-a-friend and Support. See "Account" below. There is no real billing.
+
+**Admin panel** (`/admin`, only for emails listed in `ADMIN_EMAILS`): a compact table of every element of the eight content modes (Sentence, Word, Flashcards, Dialogue, Debate, Characters, Roleplay, Photo; built-in and added together) with search, a group filter and an "Added by admin" filter, plus a form and a JSON import to add new elements without touching code. Added elements go live for every learner at once. See "Admin (`src/admin`)" and "Admin panel (`app/admin`)" below. Chat and Call have no catalog (only the four tutors), so they are not in the panel.
 
 Monorepo with two independent apps, **no root `package.json`**. Run every npm command inside `backend/` or `frontend/`.
 
@@ -74,6 +76,7 @@ Backend `.env` (git-ignored). The README says `cp .env.example .env`, but **ther
 | `RAILWAY_VOLUME_MOUNT_PATH` | no | set by Railway when a volume is attached; used as the media folder when `MEDIA_DIR` is empty, so photos survive redeploys |
 | `PEXELS_API_KEY` | no | fallback when there is no Pixabay key (existing keys only; new ones are paused); gives each Word Mode word and each Flashcards topic and card a stock photo. Without it the app shows an emoji (Word Mode) or an emoji on a gradient (Flashcards) |
 | `FRONTEND_URL` | no | comma-separated CORS origins, default `http://localhost:3000`; the first entry is also the base of password-reset links |
+| `ADMIN_EMAILS` | for the Admin panel | comma-separated account emails (case-insensitive) that may open `/admin` and call `/admin/*`, e.g. `me@gmail.com`. Empty or missing: nobody is an admin (the Account menu hides the row and `/admin` explains how to enable it). Restart the API after changing it |
 | `GOOGLE_CLIENT_ID` | for Google sign-in | Google Cloud OAuth "Web application" client ID; add the frontend origin (e.g. `http://localhost:3000`) under Authorized JavaScript origins. Missing: `POST /auth/google` returns 503 |
 | `GMAIL_USER` | for verification and reset emails | the Gmail address that sends them (the sender shown to users is this address). Used together with `GMAIL_APP_PASSWORD` |
 | `GMAIL_APP_PASSWORD` | with `GMAIL_USER` | a 16-character Google **App Password** (Google Account > Security > 2-Step Verification on > App passwords), not the normal Gmail password; spaces are ignored. Gmail wins over Resend when both are set |
@@ -91,8 +94,8 @@ Frontend `.env.local` (git-ignored; there is **no `.env.local.example` in the re
 
 ```
 backend/
-  prisma/schema.prisma            19 models (see Database)
-  prisma/migrations/              23 folders, applied in name order (the list is below the tree)
+  prisma/schema.prisma            20 models (see Database)
+  prisma/migrations/              24 folders, applied in name order (the list is below the tree)
   src/main.ts                     bootstrap, body limit, CORS, static /media, ValidationPipe
   src/app.module.ts               ConfigModule (global), Throttler, HealthController (GET /health), all feature modules
   src/prisma/prisma.module.ts     global PrismaService (extends PrismaClient, connects on init)
@@ -100,6 +103,7 @@ backend/
   src/progress/                   controller, service, dto, module (exports ProgressService)
   src/ai/                         controller, service, openrouter.service, prompts, dto, module (exports OpenRouterService)
   src/account/                    controller, service, dto, options (Personalization questions, support types), subscription.util, module
+  src/admin/                      admin.content (per-mode validation + live-catalog hooks), admin.service, admin.guard (ADMIN_EMAILS), controller, module (Admin panel)
   src/sentence/                   catalog, scoring, prompts, dto, service, controller, module (Sentence Mode)
   src/word/                       catalog, prompts, dto, images (Pixabay/Pexels, exports MEDIA_DIR), service, controller, module (Word Mode; exports WordImageService)
   src/flashcard/                  catalog, prompts, dto, service, controller, module (Flashcards Mode; reuses WordImageService)
@@ -122,6 +126,9 @@ frontend/
   components/                     Modal, PracticeTimer, ProgressView, CoursesView, LearnView, ExploreView, PronunciationReview, AuthShell; GeneratePanel and PhotoPanel (legacy, unreachable)
   components/<mode>/              one *Provider.tsx per mode (login gate, Premium gate except Chat, PracticeTimer, shared data): sentence (+ SentenceShell), word, flashcards, dialogue, debate, characters (+ CharacterPortrait, ReviewPanels), roleplay (+ Feedback), photo, chat (+ ChatDialogs), call (+ CallDialogs)
   components/account/             AccountView (menu), ProfileView, PersonalizationView, SettingsView (also exports Picker, PickerField, LANGUAGE_OPTIONS, LEVEL_OPTIONS), SubscriptionView, ReferView, SupportView, SubPage
+  app/admin/page.tsx              Admin panel page (admin check, then components/admin/AdminPanel)
+  components/admin/               AdminPanel (tabs + compact table), AddElementModal, ImportModal
+  lib/admin.ts                    admin API calls, form definition per mode (FORMS), JSON import examples (TEMPLATES)
   lib/api.ts, modes.ts, dates.ts  API client + types, mode/language constants, local-date helpers
   lib/password.ts                 passwordError() + PASSWORD_HINT (same rule as the backend)
   lib/courses.ts                  COURSES (32), the learning path of each course (pathFor), selected-course storage
@@ -165,6 +172,7 @@ Migrations (never rename or edit an applied one; some folders have no name suffi
 | `20261105160000_support_messages` | SupportMessage |
 | `20261106100000_google_reset_password` | User.googleId, passwordHash nullable, PasswordResetToken |
 | `20261106120000_email_verification` | User.emailVerified (an `UPDATE` marks every existing user verified), EmailVerification |
+| `20261108120000_custom_content` | CustomContent (elements added from the Admin panel) |
 
 ```
 
@@ -174,7 +182,8 @@ Migrations (never rename or edit an applied one; some folders have no name suffi
 - `bodyParser: false`, then `json({ limit: '6mb' })`. Needed for base64 photos (the DTO allows up to 5,000,000 chars).
 - `trust proxy` = 1 (so throttling sees the real client IP behind one proxy).
 - CORS allows only the origins in `FRONTEND_URL`.
-- Static files: `app.useStaticAssets(join(process.cwd(), 'media'), { prefix: '/media/', maxAge: '7d' })`. It must serve the same folder the photo services write to (`MEDIA_DIR`; see gotcha 54).
+- CORS is enabled **before** the static files, so `/media/*` pictures also carry the CORS header (Photo Mode shrinks a photo on a canvas, which needs it for pictures uploaded in the Admin panel; see gotcha 62).
+- Static files: `app.useStaticAssets(MEDIA_DIR, { prefix: '/media/', maxAge: '7d' })` (`MEDIA_DIR` imported from `word/word.images.ts`). It must serve the same folder the photo services write to (see gotcha 54).
 - Global `ValidationPipe({ whitelist: true, transform: true })`: unknown properties are silently stripped, so a new request field **must** be added to the DTO or it will vanish.
 
 ### Rate limiting
@@ -348,6 +357,20 @@ All routes are behind `AuthGuard` (default throttle 20 / 60 s; each judging is o
 - `POST /photo/judge` `{ photoId, image (data URL, png|jpeg|webp, max 5M chars), description (2-1000 chars), targetLanguage?, nativeLanguage?, level? }`. Because the backend cannot read the frontend's files, **the browser resizes the picture (max 800 px JPEG) and sends it along**. The AI (`judgeSystem` in `photo.prompts.ts`, multimodal message, temperature 0.4, up to 2 attempts, 502 if the JSON is unusable) returns `{ score 1-5, summary, corrections (max 3), better, betterTranslation, words (max 3) }`. The learner's text is treated as data, not instructions. `passed` = score >= `PASS_SCORE` (3, imported from `sentence.service.ts`). The row is upserted (best score, last score, attempts, sticky `passed`), `ProgressService.practice()` gives +10 XP, and the response is `{ result, passed, bestScore, percent, progress }`.
 - Like `/ai/photo`, this needs a vision-capable model: if `openrouter/free` does not route to one, pin it with `OPENROUTER_MODEL`.
 
+### Admin (`src/admin`)
+
+The Admin panel's API. Nothing else in the backend knows about it except that the catalogs can grow at runtime.
+
+- **Who is an admin**: `ADMIN_EMAILS` (see Environment variables). `AdminGuard` repeats `AuthGuard`'s token check and then requires the token's email to be in that list (403 otherwise). `GET /admin/me` only needs a login and answers `{ admin, configured }`; the Account menu uses it to show the "Admin panel" row. Throttle 120 / 60 s.
+- `GET /admin/overview` -> `{ modes: [{ mode, label, total, custom, units: [{ number, title }] | null }], roleplayCategories, characterKinds }` (`units` only for sentence, word, photo, and feeds the Unit picker). `GET /admin/items?mode=` -> `{ mode, rows: [{ id, title, sub, emoji, group, custom, image? }] }`: the compact table, built-in and custom together, in catalog order.
+- `POST /admin/items` `{ mode, item }` adds one element; `POST /admin/import` `{ mode, items[1..200] }` adds many (each checked on its own, answer `{ created, failed, results: [{ index, ok, id?, error? }], total, custom, units }`; not for `photo`); `DELETE /admin/items/:mode/:id` deletes an element **added from the panel** (400 for a built-in one). Bad input is a 400 with a readable message, a duplicate id a 409.
+- **How an element goes live**: `admin.content.ts` holds one definition per mode (`DEFS`): `normalize` (validates the raw payload, builds the id from the title with `slug()`), `add` (pushes the element into the mode's **existing catalog array** in place, e.g. `FLASH_TOPICS.push(...)`, or into the right unit for Sentence, Word and Photo), `clear`, `rows` and `ids`. The mode services keep reading their catalogs on every request, so none of them changed except that the old `TOTAL_SKILLS`, `TOTAL_WORDS`, `TOTAL_PHOTOS` constants became the functions `totalSkills()`, `totalWords()`, `totalPhotos()` (a constant would go stale). `AdminService.onModuleInit` loads every `CustomContent` row into the catalogs at startup; a missing table (migration not applied) is logged and the app boots with built-in content only.
+- **Fields per mode** (the form definition is `FORMS` in `frontend/lib/admin.ts`): Sentence `unit, unitTitle?, title, emoji, description, photo?`; Word `unit, unitTitle?, english, emoji, photo?`; Flashcards `title, emoji, photo, hint`; Dialogue `title, emoji, photo, partner, partnerEmoji, setting`; Debate `title, emoji, statement, photo`; Characters `name, emoji, kind (history|myth|fiction), hue 0-360, about`; Roleplay `title, category, emoji, photo, partner, partnerEmoji, scenario, tasks[3]`; Photo `unit, image`. `unit` must be an existing unit or the next number (a new unit; Sentence and Word then need `unitTitle`). The id comes from the title (letters and digits only, so a title without any is rejected); an id that already exists in the mode, built-in or custom, is a 409. Photo ids are `photo-<n>` with n one above the largest in use.
+- **Photos**: the browser shrinks the picture to a JPEG data URL (max 1200 px) and sends it; the API checks the type and size (under 3 MB), saves the file to `<MEDIA_DIR>/admin-photos/photo-<n>.<ext>` and serves it at `<PUBLIC_API_URL>/media/admin-photos/...`. The data URL is also kept in `CustomContent.data.image`, and `onModuleInit` re-creates a missing file from it, so photos survive a redeploy even without a volume. Deleting removes the file and the row.
+- **Deleting** rebuilds that mode's custom elements from the database (so a unit that only the deleted element created disappears too). Learners' progress rows for a deleted id stay in the database; the services already ignore ids that are not in the catalog (`findSkill` / `findWord` / `findPhoto` checks), so they are simply not counted.
+- **What is not stored per element**: the AI still writes the learner-facing content (sentences, words, decks, dialogues, replies) in the learner's language from the element's title and hints, exactly as for built-in elements. Characters have no portrait upload (the emoji tile on the `hue` colour is used; `characters.photos.ts` only knows the built-in ids).
+- Cost: no AI requests. Each listing is one cheap in-memory read.
+
 ### Account (`src/account`)
 All routes are behind `AuthGuard`. **Billing is not connected**: plans have no prices and nothing is charged; everything is demo logic so the Account page has something to manage.
 
@@ -363,7 +386,7 @@ All routes are behind `AuthGuard`. **Billing is not connected**: plans have no p
 - **`syncPremium`** (`subscription.util.ts`): when a subscription exists, is not `active`, and has run out, it sets `Progress.premium = false`. It runs inside `ProgressService.snapshot` and `GET /account/subscription`. **Active plans never expire** (nothing renews or charges), and a user who got Premium from the old demo unlock without a `Subscription` row is never switched off.
 
 ### Database (`prisma/schema.prisma`)
-19 models. Timestamps (`createdAt`, `updatedAt`, `expiresAt`, `currentPeriodEnd`) are `DateTime`; day keys (`PracticeEntry.day`, `PracticeDay.day`, `Progress.lastDay`) are `YYYY-MM-DD` strings.
+20 models. Timestamps (`createdAt`, `updatedAt`, `expiresAt`, `currentPeriodEnd`) are `DateTime`; day keys (`PracticeEntry.day`, `PracticeDay.day`, `Progress.lastDay`) are `YYYY-MM-DD` strings.
 
 - `User(id cuid, email unique, name? (the first name), lastName?, avatar? (a small square data URL), timeZone default "UTC+00:00", passwordHash? (null for Google-only accounts), googleId? unique, emailVerified default false, emailSpecialOffers / emailLearning / appSpecialOffers / appLearning default true, optOutAiTraining / optOutProfiling default false, createdAt, referralCode? unique, referredById? -> User (onDelete SetNull), referralRewarded Boolean)`. The self-relation is named `Referrals`. `emailVerified` is true for accounts that existed before verification and for Google accounts. The notification and privacy booleans are stored only (nothing reads them).
 - `EmailVerification(userId PK -> User, codeHash, expiresAt, attempts default 0, sentAt)`: at most one pending code per user; `codeHash` is `sha256(userId:code)`, the code itself is never stored.
@@ -384,6 +407,7 @@ All routes are behind `AuthGuard`. **Billing is not connected**: plans have no p
 - `WordProgress(userId, wordId, language, lesson Json?, step, scores Json default [], finished, passed, bestScore, attempts, updatedAt)`, composite PK `(userId, wordId, language)`. `lesson` stores the generated lesson so a resume shows identical content; `finished` is the current run, `passed`/`bestScore` are lifetime.
 - `FlashcardDeck(userId, topicId, language, cards Json, status Json default [], flagged Json default [], updatedAt)`, composite PK `(userId, topicId, language)`. `cards` is `[{ term, translation, example, exampleTranslation, photo, image }]`; `status` is one of `new | learning | known` per card and `flagged` a boolean per card, **both matched to the card by array index**, so never reorder or trim `cards` without rewriting both arrays. `topicId` must match an id in `flashcard.catalog.ts`.
 - `PhotoProgress(userId, photoId, language, bestScore Int, lastScore Int, attempts, passed, updatedAt)`, composite PK `(userId, photoId, language)`. `photoId` must match an id in `photo.catalog.ts`; a score of 3 or more sets `passed`, which stays true.
+- `CustomContent(id cuid, mode, itemId, data Json, createdBy? (admin email), createdAt)`, unique `(mode, itemId)`, index `(mode, createdAt)`: one row per element added from the Admin panel. `mode` is one of the eight content modes, `itemId` is the same URL slug the built-in elements use (it keys learners' progress rows), `data` is the validated element (photo rows also hold the picture as a data URL). Not related to `User`, so it is never cascaded.
 - All child relations `onDelete: Cascade` (except `referredBy`, which is `SetNull`).
 - Never edit an applied migration. Change the schema, then run `npx prisma migrate dev --name <change>` and commit the generated folder.
 
@@ -523,7 +547,7 @@ Flow: Home -> `/roleplay` -> `/roleplay/<scenarioId>` -> `/roleplay/<scenarioId>
 ### Account page (`components/account`)
 `AccountView` (props: `s`, `onSettings`, `onLogout`, `onToast`, `onSnapshot`) keeps a local `view` state (`menu` | sub-page) instead of using routes, so Account is always `/dashboard` with the Account tab active.
 
-- **Menu**: an "Account settings" list of cards for Profile, Personalization, Settings, Subscriptions, Refer a friend, Support and Log out, plus a footer of legal titles that are plain text, not links. (The old Target language card on this menu is gone; the language now lives in Settings.)
+- **Menu**: an "Account settings" list of cards for Profile, Personalization, Settings, Subscriptions, Refer a friend, Support (an **Admin panel** row appears before Support for admins only, from `GET /admin/me`; it does `router.push("/admin")`) and Log out, plus a footer of legal titles that are plain text, not links. (The old Target language card on this menu is gone; the language now lives in Settings.)
 - `SettingsView`: three picker fields, **Choose translation language** (`nativeLanguage`), **Choose target language** and **Change your target language level**, each opening a `Picker` popup (search box for languages, a card per option, Save enabled only after picking something new). Saving calls `onSettings` (the dashboard's optimistic `PATCH /progress/settings`) and shows a "Saved" toast. Flags come from `https://flagcdn.com/w80/<code>.png` (an external request) with a two-letter badge as fallback. `Picker`, `PickerField`, `LANGUAGE_OPTIONS` and `LEVEL_OPTIONS` are exported and reused by the Chat and Call Settings dialogs.
 - `ProfileView`: loads `GET /account/profile` and has its own sub-pages (menu, Personal details, Change password, Email notifications, App notifications, Privacy preferences) plus a Delete account confirmation modal that calls `onLogout` after a successful delete. Switches save immediately (optimistic, reverted with a toast on failure); Personal details and Change password have a Save button that stays disabled until something changed or all fields are filled. The Personal details page also has a round picture (the `User` icon plus an \"Add photo\" button when empty; the picture plus \"Change photo\" / \"Remove\" otherwise). A chosen file is centre-cropped and shrunk to 256x256 JPEG in the browser (`resizeImage`) and saved straight away. Saving details re-fetches `/progress` so the name in the top-right button updates.
 - `PersonalizationView`: loads `GET /account/personalization` and renders a `<select>` per server-supplied question. Each change is saved on its own (`PATCH`), updated optimistically, rolled back with a toast if saving fails.
@@ -551,6 +575,15 @@ Frontend only: no endpoint, no migration. A dashboard tab (`active === "explore"
 - **Links** go to the exercise pages (`/roleplay/<id>`, `/word/<id>`, ...). Non-Premium users get the upsell modal through `onLocked`, like Learn.
 - Covers are stock photos (emoji on a gradient without a Pixabay/Pexels key or when an image fails to load). Sentence lessons use `cover` from `GET /sentence/units`. Word Mode's `GET /word/units` has no photos (it would mean 120 lookups), so after choosing its 5 words Explore calls `GET /word/covers?ids=a,b,c` once and shows the photos, with the emoji tile until they arrive. Photo and Word thumbnails share one `Thumb` component: an equal square slot (`flex-1 basis-0 aspect-square`) with the picture `object-cover`, so sizes never depend on the image's own dimensions. Gradient classes live in the component, not in `lib/`.
 
+### Admin panel (`app/admin`, `components/admin`, `lib/admin.ts`)
+
+- `app/admin/page.tsx` (client): redirects to `/login` without a token, asks `GET /admin/me`, and shows `AdminPanel` for admins; otherwise a short message ("not an admin", or how to set `ADMIN_EMAILS` when none is configured).
+- `AdminPanel`: pill tabs for the eight modes with the element count and a green `+N` for added ones; a toolbar with search, a group filter (unit, category, kind...), an "Added by admin" checkbox, **Import JSON** (hidden for Photo) and **Add new**; and a compact list (one 32 px line per element: emoji or thumbnail, title, details on `md`+, group chip, a Built-in label or an Added badge with a delete button). It shows 100 rows at a time ("Show more"). Delete asks `window.confirm`, then reloads the mode.
+- `AddElementModal`: the form is generated from `FORMS[mode]` in `lib/admin.ts` (field kinds: text, emoji, textarea, unit, select, hue, tasks, image). The Unit select lists the existing units plus "+ New unit (N)" (Sentence and Word then ask for the unit title). **Add** closes, **Add and next** keeps unit/category/kind and clears the rest. Photo mode takes several pictures at once, shrinks each in the browser (`fileToDataUrl`, max 1200 px JPEG) and uploads them one by one.
+- `ImportModal`: paste JSON (a list, or `{ items: [...] }`) or pick a `.json` file; "Insert example" fills `TEMPLATES[mode]`. The result lists the items that were skipped and why.
+- Counts in the tabs are patched from each answer (`total`, `custom`, `units`), so no extra request is needed after an add. `lib/admin.ts` has its own small `call()` (the shared `request` in `lib/api.ts` is not exported) and does not log you out on a 403.
+- `lib/photo.ts` `imageToDataUrl` now sets `crossOrigin = "anonymous"` so Photo Mode can shrink a picture served by the API (see gotcha 62).
+
 ### Styling and TypeScript
 Tailwind utility classes only (`globals.css` is just the three directives). Dark theme, with two palettes. The **dashboard** shell uses page `bg-[#0D0E17]`, cards `bg-[#171827]`, a `bg-[#11121D]` bottom bar and violet accents. The **mode pages and Account sub-pages** use page `bg-[#16161c]` (full-screen chats `bg-[#222228]`), cards `bg-[#1f1f27]` and indigo-600 primary, with `white/10` surfaces. Keep new UI consistent with the area it lives in. `tsconfig` is `strict`; path alias `@/*` = frontend root. Client components start with `"use client"`. Frontend uses double quotes and 2-space indent; backend uses single quotes.
 
@@ -559,6 +592,8 @@ Tailwind utility classes only (`globals.css` is just the three directives). Dark
 **Add a chat-style mode** (conversation with a reviewing side panel): copy a sibling module rather than touching `/ai/chat`. Backend: a new `src/<mode>/` with catalog (if it has a grid), prompts, dto, service, controller and module, registered in `app.module.ts`; add a Prisma model for saved chats (and a migration); use `ProgressService.practice()` in `reply` for the +10 XP. Frontend: add the id to `ModeId` and `MODES` in `lib/modes.ts` and to the `router.push` list in `clickMode`; add `app/<mode>/` pages, a `<Mode>Provider`, and an `api.<mode>` namespace in `lib/api.ts`. Debate (grid + sides) and Roleplays (grid + scenarios) are the closest templates; Chat and Call are the templates for one-conversation-plus-history modes.
 
 **Add a Debate topic**: append to `DEBATE_TOPICS` in `backend/src/debate/debate.catalog.ts` (no DB change; new id, never rename one with saved debates; `photo` is the cover search text).
+
+**Add content without code**: use the Admin panel (`/admin`, add your email to `ADMIN_EMAILS`). It covers new Sentence skills, Word words, Flashcards topics, Dialogue topics, Debate topics, Characters, Roleplay scenarios and Photo pictures, and stores them in `CustomContent`. To ship an element in the code instead, edit the catalog as in the recipes here. **Add a new content mode to the Admin panel**: add a definition to `DEFS` in `backend/src/admin/admin.content.ts` (and to `MODES` / `MODE_LABEL`), and a form to `FORMS` (and `TEMPLATES`) in `frontend/lib/admin.ts`; the mode's catalog must be a mutable array or unit list that its service reads on every request.
 
 **Add a Chat/Call tutor**: add the name to `TUTORS` in `backend/src/chat/chat.dto.ts`, a persona line to `PERSONA` in `chat.prompts.ts`, the same entry (with a picture in `frontend/public/tutors/`) to `TUTORS` in `frontend/lib/chat.ts`. Saved chats keep the tutor name as plain text.
 
@@ -650,12 +685,17 @@ Tailwind utility classes only (`globals.css` is just the three directives). Dark
 
 53. **Password rule is duplicated** in `backend/src/auth/password.rule.ts` and `frontend/lib/password.ts` (8+ characters, one lowercase, one uppercase, one digit; other characters such as symbols are still allowed, and only ASCII letters count). It is enforced only where a password is chosen (register, reset-password, change password), never at login, and existing users are not forced to change theirs. Change both files together.
 
-54. **The static `/media/` folder must match `MEDIA_DIR`.** `word.images.ts` and `characters.photos.ts` save pictures to `MEDIA_DIR` (Railway volume path, `MEDIA_DIR`, or `./media` locally), so `main.ts` has to serve that same folder. It originally served only `join(process.cwd(), 'media')`, which made photos 404 on Railway with a volume; this was fixed (Pixabay photos confirmed working on the live server and on localhost). If photos show only an emoji/placeholder online again, check this first.
+54. **The static `/media/` folder must match `MEDIA_DIR`.** (The copy of the repo that the Admin panel change was made on still had the old `join(process.cwd(), 'media')` line in `main.ts`; it now imports `MEDIA_DIR`.) `word.images.ts` and `characters.photos.ts` save pictures to `MEDIA_DIR` (Railway volume path, `MEDIA_DIR`, or `./media` locally), so `main.ts` has to serve that same folder. It originally served only `join(process.cwd(), 'media')`, which made photos 404 on Railway with a volume; this was fixed (Pixabay photos confirmed working on the live server and on localhost). If photos show only an emoji/placeholder online again, check this first.
 55. **Chat, Call and Debate trust the browser** like the other modes: saved reviews and translations are only shape-checked, XP comes from `/reply`, and Premium is UI-only (Chat is free by design). A Chat turn costs up to 3 OpenRouter requests (reply, review, suggestion bar), so the free daily quota drains faster; turn the suggestion bar off in Settings to save one.
 56. **Tutor list is duplicated** in `backend/src/chat/chat.dto.ts` (`TUTORS`) and `frontend/lib/chat.ts`; the avatars are `frontend/public/tutors/<name>.png`. Saved chats and calls store the tutor name as text, so renaming one orphans the picture lookup (the UI falls back to Emma).
 57. **Dead code**: `GeneratePanel` and the `sentence`/`word`/`dialogue`/`flashcards` generate types, `PhotoPanel`, `POST /ai/chat`, `POST /ai/photo`, `ChatMode`, the `openMode` branches in the dashboard, `public/call/kai.svg` and `public/modes/chat 1.png` are not reachable or used. Remove them together if you clean up.
 58. **Chat and Call history is capped at 50 rows** per language in `GET /chat/history` and `GET /call/history`, and nothing deletes old archived rows automatically (each is a JSON blob of the whole conversation).
 59. **Language flags are an external request** (`flagcdn.com`) in Account > Settings and the Chat/Call Settings dialogs; offline or blocked, a two-letter badge shows instead.
+60. **Catalogs are mutated at runtime.** Elements added in the Admin panel are pushed into the same arrays as the built-in ones (`SENTENCE_UNITS`, `WORD_UNITS`, `FLASH_TOPICS`, `DIALOGUE_TOPICS`, `DEBATE_TOPICS`, `CHARACTERS`, `ROLEPLAY_SCENARIOS`, `PHOTO_UNITS`) and removed again on delete. Never cache a catalog's length or contents in a module-level constant (that is why the `TOTAL_*` constants became functions), and give a new catalog consumer the array, not a copy. Several API instances would each load the rows at their own startup, so an element added on one instance only shows on the others after a restart.
+61. **Admin access is only `ADMIN_EMAILS`.** There is no admin role in the database and no way to grant it from the UI. The check uses the email in the JWT, which cannot change in this app (the email is read-only); a user who is removed from the list loses access on the next request, not when their token expires.
+62. **Pictures uploaded in the Admin panel are served by the API, not the frontend.** `main.ts` therefore enables CORS before the static `/media/` handler and `imageToDataUrl` loads with `crossOrigin = "anonymous"`; if Photo Mode says "Couldn't load the photo" for an uploaded picture, check `PUBLIC_API_URL` (the stored URL is built from it when the API starts) and that `FRONTEND_URL` lists the frontend origin.
+63. **Deleting an Admin-panel element does not delete progress.** `SentenceProgress`, `WordProgress`, `FlashcardDeck`, `DialogueProgress`, `DebateSession`, `CharacterSession`, `RoleplaySession` and `PhotoProgress` rows for that id stay (the table has no foreign key to the catalog); they are ignored while the id is missing and count again if the same title is added later, because the id is built from the title. The Admin panel cannot edit an element: delete it and add it again.
+64. **Custom elements are not in `lib/courses.ts`.** The Courses/Learn paths list ids from the built-in catalogs, so an added Word, Sentence skill or Dialogue topic shows in its own mode (and in Explore) but not in a course path. Add it to `COURSES` by hand if it should appear there.
 
 ## Working agreements for Claude
 
@@ -663,5 +703,6 @@ Tailwind utility classes only (`globals.css` is just the three directives). Dark
 - Read the relevant file before editing; the code is compact and heavily interdependent (see Recipes).
 - Prefer small, targeted diffs that follow the existing style (short one-line comments that explain why, no new dependencies without a reason).
 - After backend changes run `npm run build` in `backend/`; after frontend changes run `npm run build` in `frontend/`. State clearly if you could not run them.
+- Admin panel changes: a new field on an element needs the validator in `admin.content.ts`, the form in `lib/admin.ts` (`FORMS`, `TEMPLATES`) and the catalog type to agree; the DTO whitelist does not apply because the admin routes take plain objects.
 - Never commit secrets; `.env` and `.env.local` are git-ignored.
 - Do not edit applied Prisma migrations or `package-lock.json` by hand.

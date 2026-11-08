@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { CalendarCheck, Gift, LifeBuoy, LogOut, Settings, SlidersHorizontal, User, type LucideIcon } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { CalendarCheck, Gift, LayoutList, LifeBuoy, LogOut, Settings, SlidersHorizontal, User, type LucideIcon } from "lucide-react";
 import type { Progress } from "@/lib/api";
+import { admin } from "@/lib/admin";
 import { PersonalizationView } from "./PersonalizationView";
 import { ProfileView } from "./ProfileView";
 import { ReferView } from "./ReferView";
@@ -37,6 +39,10 @@ export function AccountView({ s, onSettings, onLogout, onToast, onSnapshot }: {
   onToast: (message: string) => void; onSnapshot: (p: Progress) => void;
 }) {
   const [view, setView] = useState<View>("menu");
+  const router = useRouter();
+  // only admins (ADMIN_EMAILS on the backend) see the Admin panel row
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => { admin.me().then((r) => setIsAdmin(r.admin)).catch(() => {}); }, []);
   const back = () => setView("menu");
 
   if (view === "personalization") return <PersonalizationView onBack={back} onToast={onToast} />;
@@ -58,6 +64,7 @@ export function AccountView({ s, onSettings, onLogout, onToast, onSnapshot }: {
           <Row icon={Settings} title="Settings" sub="Manage your account settings." onClick={() => setView("settings")} />
           <Row icon={CalendarCheck} title="Subscriptions" sub="Manage your subscriptions." onClick={() => setView("subscriptions")} />
           <Row icon={Gift} title="Refer a friend" sub="Get 1 month Premium for free." onClick={() => setView("refer")} />
+          {isAdmin && <Row icon={LayoutList} title="Admin panel" sub="View and add learning content." onClick={() => router.push("/admin")} />}
           <Row icon={LifeBuoy} title="Support" sub="Contact our support team." onClick={() => setView("support")} />
           <Row icon={LogOut} title="Log out" sub="Log out from this profile." onClick={onLogout} danger />
         </div>

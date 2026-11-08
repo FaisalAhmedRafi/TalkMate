@@ -60,7 +60,8 @@ export const WORD_UNITS: WordUnit[] = [
 ];
 
 export const WORDS_PER_UNIT = 12;
-export const TOTAL_WORDS = WORD_UNITS.reduce((n, u) => n + u.words.length, 0);
+// A function, not a constant: the admin panel adds words at runtime (see src/admin).
+export const totalWords = () => WORD_UNITS.reduce((n, u) => n + u.words.length, 0);
 
 export function findWord(id: string): { unit: WordUnit; word: WordItem } | null {
   for (const unit of WORD_UNITS) {

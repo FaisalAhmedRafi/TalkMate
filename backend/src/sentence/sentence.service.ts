@@ -5,7 +5,7 @@ import { PrismaService } from '../prisma/prisma.module';
 import { ProgressService } from '../progress/progress.service';
 import { SENTENCE_PHOTO } from '../explore/photo-queries';
 import { WordImageService } from '../word/word.images';
-import { findSkill, SENTENCE_UNITS, TOTAL_SKILLS } from './sentence.catalog';
+import { findSkill, SENTENCE_UNITS, totalSkills } from './sentence.catalog';
 import { CompleteDto, EvaluateDto, SessionDto } from './sentence.dto';
 import { evaluateSystem, SENTENCES_PER_SESSION, sessionSystem } from './sentence.prompts';
 import { anchorScore, clampScore, matchSpeech } from './sentence.scoring';
@@ -52,9 +52,9 @@ export class SentenceService {
         [k.id, (await this.images.search(`sentence-cover:${k.id}`, SENTENCE_PHOTO[k.id] ?? ''))?.url ?? null])),
     );
     return {
-      percent: Math.round((passed / TOTAL_SKILLS) * 100),
+      percent: Math.round((passed / totalSkills()) * 100),
       passed,
-      total: TOTAL_SKILLS,
+      total: totalSkills(),
       units: SENTENCE_UNITS.map((u) => ({
         number: u.number,
         title: u.title,

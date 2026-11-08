@@ -17,10 +17,11 @@ export function nextPhotoId(units: PhotoUnits | null, id: string): string | null
   return i >= 0 && i < all.length - 1 ? all[i + 1] : null;
 }
 
-/** Loads a same-origin image and shrinks it to a JPEG data URL (max 800 px) so the request stays small. */
+/** Loads an image (same-origin, or from the API with CORS) and shrinks it to a JPEG data URL (max 800 px) so the request stays small. */
 export function imageToDataUrl(src: string, max = 800): Promise<string> {
   return new Promise((resolve, reject) => {
     const img = new Image();
+    img.crossOrigin = "anonymous"; // photos added in the admin panel are served by the API, a different origin
     img.onload = () => {
       const scale = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
       const c = document.createElement("canvas");

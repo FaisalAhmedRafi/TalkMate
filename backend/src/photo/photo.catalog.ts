@@ -14,6 +14,7 @@ export const PHOTO_UNITS: PhotoUnit[] = [
   { number: 2, photos: range(9, 16) },
 ];
 
-export const TOTAL_PHOTOS = PHOTO_UNITS.reduce((n, u) => n + u.photos.length, 0);
+// A function, not a constant: the admin panel adds photos at runtime (see src/admin).
+export const totalPhotos = () => PHOTO_UNITS.reduce((n, u) => n + u.photos.length, 0);
 
 export const findPhoto = (id: string) => PHOTO_UNITS.flatMap((u) => u.photos).find((p) => p.id === id) ?? null;
