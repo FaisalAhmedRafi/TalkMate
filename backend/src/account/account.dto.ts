@@ -1,5 +1,6 @@
 import { IsBoolean, IsIn, IsOptional, IsString, Matches, MaxLength } from 'class-validator';
 import { PASSWORD_MESSAGE, PASSWORD_RULE } from '../auth/password.rule';
+import { COUNTRY_MESSAGE, PHONE_MESSAGE } from '../auth/phone.rule';
 import { optionsFor, SUPPORT_TYPES } from './account.options';
 import { PLAN_MONTHS } from './subscription.util';
 
@@ -19,6 +20,11 @@ export class ProfileDto {
   @IsOptional() @IsString() @MaxLength(60) firstName?: string;
   @IsOptional() @IsString() @MaxLength(60) lastName?: string;
   @IsOptional() @Matches(/^UTC[+-](0\d|1[0-4]):[0-5]\d$/, { message: 'Pick a valid time zone.' }) timeZone?: string;
+}
+
+export class ContactDto {
+  @IsString() @Matches(/^[A-Za-z]{2}$/, { message: COUNTRY_MESSAGE }) country: string; // ISO 3166-1 alpha-2, e.g. "BD"
+  @IsString() @Matches(/\S/, { message: PHONE_MESSAGE }) @MaxLength(25, { message: PHONE_MESSAGE }) phone: string; // international form, e.g. +8801712345678
 }
 
 export class PasswordDto {

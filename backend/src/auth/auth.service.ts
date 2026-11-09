@@ -177,7 +177,9 @@ export class AuthService {
         });
       }
     }
-    return this.session(user.id, user.email, dto.remember);
+    // a Google sign-in without a country and phone number (a new Google account, or an older one) must add them before using the app
+    const session = await this.session(user.id, user.email, dto.remember);
+    return { ...session, needsDetails: !user.country || !user.phone };
   }
 
   private async verifyGoogle(credential: string) {

@@ -129,6 +129,7 @@ export type NotificationPrefs = { emailSpecialOffers: boolean; emailLearning: bo
 export type PrivacyPrefs = { optOutAiTraining: boolean; optOutProfiling: boolean };
 export type ProfileData = {
   email: string; firstName: string; lastName: string; timeZone: string; avatar: string | null;
+  country: string | null; phone: string | null; needsDetails: boolean;
   notifications: NotificationPrefs; privacy: PrivacyPrefs;
 };
 export type Referral = { code: string; invited: number; rewarded: number };
@@ -139,6 +140,7 @@ export type SubscriptionInfo = {
 export type Progress = {
   email: string; name: string | null; avatar: string | null; xp: number; streak: number; longest: number; messages: number;
   premium: boolean; language: string; nativeLanguage: string; level: string; today: string[];
+  needsDetails: boolean; // a Google account without country / phone: sent to /complete-profile
 };
 
 async function request<T>(method: string, path: string, body?: unknown, keepalive = false): Promise<T> {
@@ -180,7 +182,7 @@ export const api = {
     register: (b: { email: string; password: string; firstName: string; lastName: string; country: string; phone: string; referralCode?: string; remember?: boolean }) => post<{ verify: true; email: string }>("/auth/register", b),
     verifyEmail: (b: { email: string; code: string; remember?: boolean }) => post<{ token: string }>("/auth/verify-email", b),
     resendVerification: (email: string) => post<{ ok: true }>("/auth/resend-verification", { email }),
-    google: (b: { credential: string; referralCode?: string; remember?: boolean }) => post<{ token: string }>("/auth/google", b),
+    google: (b: { credential: string; referralCode?: string; remember?: boolean }) => post<{ token: string; needsDetails: boolean }>("/auth/google", b),
     forgotPassword: (email: string) => post<{ ok: true }>("/auth/forgot-password", { email }),
     resetPassword: (b: { token: string; password: string }) => post<{ ok: true }>("/auth/reset-password", b),
   },
@@ -197,6 +199,7 @@ export const api = {
     savePersonalization: (b: Record<string, string>) => request<PersonalizationData>("PATCH", "/account/personalization", b),
     profile: () => request<ProfileData>("GET", "/account/profile"),
     saveProfile: (b: { firstName?: string; lastName?: string; timeZone?: string }) => request<ProfileData>("PATCH", "/account/profile", b),
+    saveContact: (b: { country: string; phone: string }) => request<ProfileData>("PATCH", "/account/contact", b),
     saveAvatar: (image: string) => request<ProfileData>("PATCH", "/account/avatar", { image }),
     removeAvatar: () => request<ProfileData>("DELETE", "/account/avatar"),
     changePassword: (b: { currentPassword: string; newPassword: string }) => post<{ ok: true }>("/account/password", b),

@@ -174,9 +174,10 @@ export default function LoginPage() {
         callback: async (resp: { credential: string }) => {
           setBusy(true); setError(null);
           try {
-            const { token } = await api.auth.google({ credential: resp.credential, referralCode: latest.current.ref, remember: latest.current.remember });
+            const { token, needsDetails } = await api.auth.google({ credential: resp.credential, referralCode: latest.current.ref, remember: latest.current.remember });
             setToken(token, latest.current.remember);
-            router.replace("/dashboard");
+            // no country / phone on file yet: ask for them first, otherwise straight to the dashboard
+            router.replace(needsDetails ? "/complete-profile" : "/dashboard");
           } catch (err) {
             setError(err instanceof Error ? err.message : "Google sign-in failed");
             setBusy(false);
@@ -201,7 +202,8 @@ export default function LoginPage() {
 
   const login = mode === "login";
   const register = mode === "register";
-  const input = "w-full rounded-2xl border border-white/15 bg-white/5 py-3.5 pl-10 pr-4 text-sm text-white outline-none placeholder:text-white/45 focus:border-violet-400 focus:ring-2 focus:ring-violet-500/30";
+  const py = register ? "py-2.5" : "py-3.5"; // the sign-up form is tighter so it fits one screen without scrolling
+  const input = `w-full rounded-2xl border border-white/15 bg-white/5 ${py} pl-10 pr-4 text-sm text-white outline-none placeholder:text-white/45 focus:border-violet-400 focus:ring-2 focus:ring-violet-500/30`;
   const switchMode = () => { setMode(login ? "register" : "login"); setError(null); setConfirm(""); setShowPassword(false); setShowConfirm(false); };
   const eye = (shown: boolean, toggle: () => void) => (
     <button type="button" onClick={toggle} aria-label={shown ? "Hide password" : "Show password"} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/50 hover:text-white">
@@ -212,12 +214,12 @@ export default function LoginPage() {
   const fade = "linear-gradient(to bottom, black 92%, transparent 100%)";
 
   return (
-    <main className="min-h-screen bg-[#140e33] text-white">
+    <main className="min-h-screen bg-[#140e33] text-white lg:h-screen lg:overflow-hidden">
       {/* same as browser zoom 110%: scales every rem size (text, spacing) on this page only; removed when leaving the page */}
       <style>{"html { font-size: 110%; }"}</style>
-      <div className="grid min-h-screen w-full grid-cols-1 lg:grid-cols-[1.1fr_1fr]">
+      <div className="grid min-h-screen w-full grid-cols-1 lg:h-screen lg:min-h-0 lg:grid-cols-[1.1fr_1fr]">
         {/* left: the same on login and register, only the right side changes */}
-        <section className="relative hidden min-h-screen overflow-hidden bg-[#4a13c0] lg:block">
+        <section className="relative hidden min-h-screen overflow-hidden bg-[#4a13c0] lg:block lg:h-screen lg:min-h-0">
           <style>{ROBOT_CSS}</style>
           {/* "slice" keeps the picture covering the area like object-cover, so the layers stay lined up at any size */}
           <svg viewBox="0 0 1306 1205" preserveAspectRatio="xMidYMid slice" aria-hidden="true" className="absolute inset-x-0 top-0 h-[74%] w-full" style={{ maskImage: fade, WebkitMaskImage: fade }}>
@@ -241,18 +243,18 @@ export default function LoginPage() {
         </section>
 
         {/* right: login / register / verify */}
-        <section className="flex min-h-screen items-center justify-center bg-[#140e33] px-6 py-10 lg:px-16">
-          <form onSubmit={submit} className="w-full max-w-[460px]">
-            <div className="mb-5 flex items-center gap-2 lg:hidden">
+        <section className={`flex min-h-screen items-center justify-center bg-[#140e33] px-6 lg:h-screen lg:min-h-0 lg:overflow-y-auto ${register ? "py-4 lg:px-10" : "py-10 lg:px-16"}`}>
+          <form onSubmit={submit} className={`w-full ${register ? "max-w-[520px]" : "max-w-[460px]"} my-auto`}>
+            <div className={`${register ? "mb-3" : "mb-5"} flex items-center gap-2 lg:hidden`}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/logo/logo-mark.png" alt="" width={44} height={44} className="h-11 w-11 object-contain" />
               <p className="text-xl font-bold tracking-tight">{brand}</p>
             </div>
 
-            <h1 className="text-4xl font-bold leading-tight tracking-tight">
+            <h1 className={`${register ? "text-3xl" : "text-4xl"} font-bold leading-tight tracking-tight`}>
               {login ? <>Welcome <span className="text-violet-400">back</span></> : register ? <>Create an <span className="text-violet-400">account</span></> : <>Verify your <span className="text-violet-400">email</span></>}
             </h1>
-            <p className="mt-2 text-sm text-white/70">
+            <p className={`${register ? "mt-1" : "mt-2"} text-sm text-white/70`}>
               {login ? <>Log in to continue your language learning journey with <b className="font-semibold text-violet-400">TalkMate</b>.</>
                 : register ? <>Start your language learning journey with <b className="font-semibold text-violet-400">TalkMate</b>.</>
                 : <>We sent a 6-digit code to <b className="text-white/90">{email}</b>. It can take a minute to arrive, so check your spam folder too.</>}
@@ -260,7 +262,7 @@ export default function LoginPage() {
             {ref && register && <p className="mt-2 text-xs text-white/60">Invite code <b>{ref}</b> applied.</p>}
 
             {mode !== "verify" && (
-              <div className="mt-6 space-y-3">
+              <div className={`${register ? "mt-4 space-y-2.5" : "mt-6 space-y-3"}`}>
                 {register && (
                   <div className="grid grid-cols-2 gap-3">
                     <Field icon={User}>
@@ -279,17 +281,19 @@ export default function LoginPage() {
                 </Field>
                 {register && (
                   <>
-                    <CountryPicker variant="country" ariaLabel="Country" placeholder="Country" value={country} onChange={pickCountry} invalid={triedSubmit && !country} />
                     <div>
-                      <div className={`flex items-stretch rounded-2xl border bg-white/5 transition-colors focus-within:border-violet-400 focus-within:ring-2 focus-within:ring-violet-500/30 ${phoneTouched && !phoneCheck.ok ? "border-red-400/60" : "border-white/15"}`}>
-                        <CountryPicker variant="dial" ariaLabel="Phone country code" value={dial} onChange={pickDial} returnFocus={false} className="flex shrink-0 border-r border-white/15" />
+                    <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-[1fr_1.25fr] sm:gap-3">
+                      <CountryPicker variant="country" compact ariaLabel="Country" placeholder="Country" value={country} onChange={pickCountry} invalid={triedSubmit && !country} />
+                      <div className={`flex min-w-0 items-stretch rounded-2xl border bg-white/5 transition-colors focus-within:border-violet-400 focus-within:ring-2 focus-within:ring-violet-500/30 ${phoneTouched && !phoneCheck.ok ? "border-red-400/60" : "border-white/15"}`}>
+                        <CountryPicker variant="dial" compact ariaLabel="Phone country code" value={dial} onChange={pickDial} returnFocus={false} className="flex shrink-0 border-r border-white/15" />
                         <input id="phone" ref={phoneInput} aria-label="Phone number" aria-invalid={phoneTouched && !phoneCheck.ok} type="tel" inputMode="tel" autoComplete="tel-national" placeholder="Phone Number" required maxLength={20} value={phone}
                           onChange={(e) => setPhone(e.target.value.replace(/[^\d+\s().-]/g, ""))} onBlur={phoneBlur}
-                          className="min-w-0 flex-1 bg-transparent py-3.5 pl-3.5 pr-10 text-sm text-white outline-none placeholder:text-white/45" />
-                        {phoneCheck.ok && <Check size={18} aria-label="Valid phone number" className="my-auto mr-3.5 shrink-0 text-emerald-400" />}
+                          className="min-w-0 flex-1 bg-transparent py-2.5 pl-3 pr-2 text-sm text-white outline-none placeholder:text-white/45" />
+                        {phoneCheck.ok && <Check size={18} aria-label="Valid phone number" className="my-auto mr-3 shrink-0 text-emerald-400" />}
                       </div>
-                      {phoneTouched && !phoneCheck.ok && <p role="alert" className="mt-1.5 px-1 text-xs text-red-300">{phoneCheck.message}</p>}
                     </div>
+                    {phoneTouched && !phoneCheck.ok && <p role="alert" className="mt-1.5 px-1 text-xs text-red-300">{phoneCheck.message}</p>}
+                  </div>
                   </>
                 )}
                 {register ? (
@@ -322,7 +326,7 @@ export default function LoginPage() {
             )}
 
             {mode !== "verify" && (
-              <div className="mt-4 flex items-center justify-between gap-3">
+              <div className={`${register ? "mt-3" : "mt-4"} flex items-center justify-between gap-3`}>
                 <label className="flex cursor-pointer items-center gap-2 text-sm text-white/75">
                   <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} className="h-5 w-5 rounded accent-violet-500" />
                   Remember this device
@@ -334,7 +338,7 @@ export default function LoginPage() {
             <ErrorText text={error} />
             {info && <p role="status" className="mt-3 rounded-lg bg-emerald-500/15 px-3 py-2 text-sm text-emerald-300">{info}</p>}
 
-            <button disabled={busy} className="mt-5 flex w-full items-center justify-center gap-2 rounded-full bg-[#7c4dff] py-3.5 text-base font-semibold shadow-[0_8px_24px_rgba(124,77,255,0.35)] hover:bg-[#8f68ff] disabled:opacity-50">
+            <button disabled={busy} className={`${register ? "mt-3.5 py-3" : "mt-5 py-3.5"} flex w-full items-center justify-center gap-2 rounded-full bg-[#7c4dff] text-base font-semibold shadow-[0_8px_24px_rgba(124,77,255,0.35)] hover:bg-[#8f68ff] disabled:opacity-50`}>
               {busy ? "Please wait…" : <>{login ? "Sign in" : register ? "Create Account" : "Verify and continue"} <ArrowRight size={20} /></>}
             </button>
 
@@ -351,7 +355,7 @@ export default function LoginPage() {
 
             {/* kept mounted (just hidden) so the Google button is not lost when the verify step opens */}
             <div className={mode === "verify" ? "hidden" : ""}>
-              <div className="my-4 flex items-center gap-3 text-xs text-white/50">
+              <div className={`${register ? "my-3" : "my-4"} flex items-center gap-3 text-xs text-white/50`}>
                 <span className="h-px flex-1 bg-white/15" />
                 {login ? "or sign in with" : "or sign up with"}
                 <span className="h-px flex-1 bg-white/15" />
@@ -359,7 +363,7 @@ export default function LoginPage() {
 
               {GOOGLE_CLIENT_ID ? (
                 // the official Google button (needed to get the ID token) sits invisibly on top of a styled button, so clicks still go to Google
-                <div className="group relative h-[57px] w-full">
+                <div className={`group relative ${register ? "h-[46px]" : "h-[57px]"} w-full`}>
                   <div className="pointer-events-none flex h-full w-full items-center justify-center gap-2 rounded-2xl border border-violet-400/50 bg-white/[0.03] text-sm font-medium text-white/90 transition group-hover:bg-violet-500/10">
                     <svg width="20" height="20" viewBox="0 0 48 48" aria-hidden="true">
                       <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
@@ -375,7 +379,7 @@ export default function LoginPage() {
                 <p className="text-center text-xs text-white/40">Google sign-in needs NEXT_PUBLIC_GOOGLE_CLIENT_ID (see CLAUDE.md).</p>
               )}
 
-              <p className="mt-5 text-center text-sm text-white/60">
+              <p className={`${register ? "mt-3" : "mt-5"} text-center text-sm text-white/60`}>
                 {login ? "New here? " : "Already have an account? "}
                 <button type="button" onClick={switchMode} className="font-semibold text-violet-400 underline-offset-2 hover:text-violet-300 hover:underline">
                   {login ? "Create an account" : "Log in"}

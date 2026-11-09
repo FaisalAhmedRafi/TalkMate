@@ -23,7 +23,7 @@ type Pos = { left: number; width: number; top?: number; bottom?: number; maxHeig
  * list also shows each calling code. The list is `position: fixed` (never clipped by the form) and opens upward when
  * there is more room above. Keyboard: type to search, Arrow keys, Home/End, Enter, Escape.
  */
-export function CountryPicker({ value, onChange, variant, ariaLabel, placeholder = "Select country", invalid = false, returnFocus = true, className = "" }: {
+export function CountryPicker({ value, onChange, variant, ariaLabel, placeholder = "Select country", invalid = false, returnFocus = true, compact = false, className = "" }: {
   value: CountryCode | null;
   onChange: (code: CountryCode) => void;
   variant: "country" | "dial";
@@ -32,6 +32,8 @@ export function CountryPicker({ value, onChange, variant, ariaLabel, placeholder
   invalid?: boolean;
   /** Put the focus back on the button after a pick. Turn off when the parent moves the focus on (e.g. to the phone input). */
   returnFocus?: boolean;
+  /** Tighter paddings, for forms that have to fit on one screen. */
+  compact?: boolean;
   className?: string;
 }) {
   const id = useId();
@@ -126,8 +128,8 @@ export function CountryPicker({ value, onChange, variant, ariaLabel, placeholder
   }
 
   const trigger = dial
-    ? `flex items-center gap-2 rounded-l-2xl pl-3.5 pr-2.5 text-sm outline-none hover:bg-white/5 focus-visible:bg-white/10`
-    : `flex w-full items-center gap-3 rounded-2xl border bg-white/5 py-3.5 pl-3.5 pr-3 text-left text-sm outline-none transition-colors ${open ? "border-violet-400 ring-2 ring-violet-500/30" : invalid ? "border-red-400/60" : "border-white/15 hover:border-white/30"} focus-visible:border-violet-400 focus-visible:ring-2 focus-visible:ring-violet-500/30`;
+    ? `flex items-center ${compact ? "gap-1.5 pl-3 pr-2" : "gap-2 pl-3.5 pr-2.5"} rounded-l-2xl text-sm outline-none hover:bg-white/5 focus-visible:bg-white/10`
+    : `flex w-full items-center gap-3 rounded-2xl border bg-white/5 ${compact ? "py-2.5" : "py-3.5"} pl-3.5 pr-3 text-left text-sm outline-none transition-colors ${open ? "border-violet-400 ring-2 ring-violet-500/30" : invalid ? "border-red-400/60" : "border-white/15 hover:border-white/30"} focus-visible:border-violet-400 focus-visible:ring-2 focus-visible:ring-violet-500/30`;
 
   return (
     <div ref={root} className={`relative ${className}`}>

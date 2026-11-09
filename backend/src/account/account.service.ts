@@ -3,7 +3,8 @@ import { Subscription } from '@prisma/client';
 import { randomInt } from 'crypto';
 import { PrismaService } from '../prisma/prisma.module';
 import * as bcrypt from 'bcryptjs';
-import { NotificationsDto, PasswordDto, PersonalizationDto, PrivacyDto, ProfileDto, SupportDto } from './account.dto';
+import { COUNTRY_MESSAGE, normalizeCountry, normalizePhone, PHONE_MESSAGE } from '../auth/phone.rule';
+import { ContactDto, NotificationsDto, PasswordDto, PersonalizationDto, PrivacyDto, ProfileDto, SupportDto } from './account.dto';
 import { QUESTIONS } from './account.options';
 import { nextPayment, syncPremium } from './subscription.util';
 
@@ -59,6 +60,7 @@ export class AccountService {
     const u = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
     return {
       email: u.email, firstName: u.name ?? '', lastName: u.lastName ?? '', timeZone: u.timeZone, avatar: u.avatar,
+      country: u.country, phone: u.phone, needsDetails: !!u.googleId && (!u.country || !u.phone),
       notifications: {
         emailSpecialOffers: u.emailSpecialOffers, emailLearning: u.emailLearning,
         appSpecialOffers: u.appSpecialOffers, appLearning: u.appLearning,
@@ -76,6 +78,16 @@ export class AccountService {
         timeZone: dto.timeZone,
       },
     });
+    return this.profile(userId);
+  }
+
+  /** Country and phone number, asked after a Google sign-in that did not have them. Same checks as sign-up. */
+  async saveContact(userId: string, dto: ContactDto) {
+    const country = normalizeCountry(dto.country);
+    if (!country) throw new BadRequestException(COUNTRY_MESSAGE);
+    const phone = normalizePhone(dto.phone);
+    if (!phone) throw new BadRequestException(PHONE_MESSAGE);
+    await this.prisma.user.update({ where: { id: userId }, data: { country, phone } });
     return this.profile(userId);
   }
 

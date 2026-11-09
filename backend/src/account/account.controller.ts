@@ -1,7 +1,7 @@
 import { Body, Controller, Delete, Get, Patch, Post, Req, UseGuards } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { AuthGuard } from '../auth/auth.guard';
-import { AvatarDto, NotificationsDto, PasswordDto, PersonalizationDto, PlanDto, PrivacyDto, ProfileDto, SupportDto } from './account.dto';
+import { AvatarDto, ContactDto, NotificationsDto, PasswordDto, PersonalizationDto, PlanDto, PrivacyDto, ProfileDto, SupportDto } from './account.dto';
 import { AccountService } from './account.service';
 
 @UseGuards(AuthGuard)
@@ -13,6 +13,7 @@ export class AccountController {
   @Patch('personalization') savePersonalization(@Req() req: any, @Body() dto: PersonalizationDto) { return this.account.savePersonalization(req.user.id, dto); }
   @Get('profile') profile(@Req() req: any) { return this.account.profile(req.user.id); }
   @Patch('profile') saveProfile(@Req() req: any, @Body() dto: ProfileDto) { return this.account.saveProfile(req.user.id, dto); }
+  @Patch('contact') saveContact(@Req() req: any, @Body() dto: ContactDto) { return this.account.saveContact(req.user.id, dto); }
   @Patch('avatar') saveAvatar(@Req() req: any, @Body() dto: AvatarDto) { return this.account.saveAvatar(req.user.id, dto.image); }
   @Delete('avatar') removeAvatar(@Req() req: any) { return this.account.saveAvatar(req.user.id, null); }
   // slow down guessing of the current password

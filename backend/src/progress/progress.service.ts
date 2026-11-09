@@ -33,7 +33,7 @@ export class ProgressService {
     await syncPremium(this.prisma, userId); // a cancelled plan that has run out stops being Premium
     const [p, user, entries] = await Promise.all([
       this.ensure(userId),
-      this.prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { email: true, name: true, lastName: true, avatar: true } }),
+      this.prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { email: true, name: true, lastName: true, avatar: true, googleId: true, country: true, phone: true } }),
       this.prisma.practiceEntry.findMany({
         where: { userId, day: today }, orderBy: { createdAt: 'desc' }, take: 30,
       }),
@@ -41,6 +41,7 @@ export class ProgressService {
     const lapsed = p.lastDay ? daysBetween(p.lastDay, today) > 1 : false;
     return {
       email: user.email, name: [user.name, user.lastName].filter(Boolean).join(' ') || null, avatar: user.avatar,
+      needsDetails: !!user.googleId && (!user.country || !user.phone), // a Google account that still has to add country and phone
       xp: p.xp, streak: lapsed ? 0 : p.streak, longest: p.longest, messages: p.messages,
       premium: p.premium, language: p.language, nativeLanguage: p.nativeLanguage, level: p.level,
       today: entries.reverse().map((e) => e.text),

@@ -38,7 +38,7 @@ const TIERS = [
 ];
 const EMPTY: Progress = {
   email: "", name: null, avatar: null, xp: 0, streak: 0, longest: 0, messages: 0, premium: false,
-  language: "Spanish", nativeLanguage: "English", level: "Beginner", today: [],
+  language: "Spanish", nativeLanguage: "English", level: "Beginner", today: [], needsDetails: false,
 };
 
 export default function Dashboard() {
@@ -57,6 +57,7 @@ export default function Dashboard() {
     if (!getToken()) { router.replace("/login"); return; }
     api.progress.get()
       .then((p) => {
+        if (p.needsDetails) { router.replace("/complete-profile"); return; } // a Google account that has not added country and phone yet
         setS(p); setLoaded(true);
         // other pages link here with ?tab=learn / ?tab=progress
         const tab = new URLSearchParams(window.location.search).get("tab");
