@@ -12,6 +12,8 @@ model User {
   email        String             @unique
   name         String? // first name
   lastName     String?
+  country      String? // ISO 3166-1 alpha-2 code chosen at sign-up, e.g. "BD" (null for older and Google-only accounts)
+  phone        String? // phone number in international E.164 form, e.g. "+8801712345678" (null for older and Google-only accounts)
   avatar       String? // small square profile picture as a data URL (resized in the browser)
   timeZone     String             @default("UTC+00:00")
   passwordHash String? // null for accounts created with Google and never given a password

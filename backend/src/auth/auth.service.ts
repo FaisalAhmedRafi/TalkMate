@@ -7,6 +7,7 @@ import { Resolver } from 'dns/promises';
 import { PrismaService } from '../prisma/prisma.module';
 import { ForgotPasswordDto, GoogleDto, LoginDto, RegisterDto, ResendVerificationDto, ResetPasswordDto, VerifyEmailDto } from './auth.dto';
 import { MailService } from './mail.service';
+import { COUNTRY_MESSAGE, normalizeCountry, normalizePhone, PHONE_MESSAGE } from './phone.rule';
 
 const RESET_MINUTES = 60;
 const CODE_MINUTES = 15; // how long an emailed verification code works
@@ -75,11 +76,15 @@ export class AuthService {
 
   async register(dto: RegisterDto) {
     const email = dto.email.trim().toLowerCase();
+    const country = normalizeCountry(dto.country);
+    if (!country) throw new BadRequestException(COUNTRY_MESSAGE);
+    const phone = normalizePhone(dto.phone);
+    if (!phone) throw new BadRequestException(PHONE_MESSAGE);
     const existing = await this.prisma.user.findUnique({ where: { email } });
     if (existing?.emailVerified) throw new ConflictException('An account with this email already exists.');
     await this.assertDeliverable(email);
     const passwordHash = await bcrypt.hash(dto.password, 10);
-    const names = { name: dto.firstName.trim(), lastName: dto.lastName.trim() };
+    const names = { name: dto.firstName.trim(), lastName: dto.lastName.trim(), country, phone };
     // An earlier sign-up that was never verified (a typo, a fake address) owns nothing, so a new attempt takes it over.
     let user = existing;
     if (user) {

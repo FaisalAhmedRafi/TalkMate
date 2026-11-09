@@ -2,11 +2,15 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, Eye, EyeOff, Lock, Mail, User, type LucideIcon } from "lucide-react";
+import { ArrowRight, Check, Eye, EyeOff, Lock, Mail, User, type LucideIcon } from "lucide-react";
+import { parsePhoneNumberFromString, type CountryCode } from "libphonenumber-js";
 import { useRouter } from "next/navigation";
 import { ErrorText } from "@/components/Modal";
 import { api, clearToken, setToken } from "@/lib/api";
 import { passwordError } from "@/lib/password";
+import { CountryPicker } from "@/components/CountryPicker";
+import { checkPhone } from "@/lib/phone";
+import { countryByCode, mainCountry } from "@/lib/countries";
 
 // The left illustration is split into layers (frontend/public/login/robot/) so the robot can move:
 // base = the whole picture without the head, head, eyes, smile. Coordinates are in the 1306x1205 picture.
@@ -28,6 +32,13 @@ export default function LoginPage() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
+  const [country, setCountry] = useState<CountryCode | null>(null);
+  const [dial, setDial] = useState<CountryCode | null>(null); // the country whose calling code is in front of the phone number
+  const [phone, setPhone] = useState("");
+  const [phoneTouched, setPhoneTouched] = useState(false);
+  const [triedSubmit, setTriedSubmit] = useState(false);
+  const dialPicked = useRef(false); // once the person picks a calling code themselves, choosing the country no longer changes it
+  const phoneInput = useRef<HTMLInputElement>(null);
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -75,6 +86,26 @@ export default function LoginPage() {
     }
   };
 
+  const phoneCheck = checkPhone(phone, dial);
+  const COUNTRY_ERROR = "Please select your country.";
+  const pickCountry = (c: CountryCode) => {
+    setCountry(c);
+    if (!dialPicked.current) setDial(c); // the phone's calling code follows the country until the person chooses another
+    setError((m) => (m === COUNTRY_ERROR ? null : m));
+  };
+  const pickDial = (c: CountryCode) => { dialPicked.current = true; setDial(c); phoneInput.current?.focus(); };
+  // leaving the phone box: show what is wrong, or tidy a good number into its national form (a "+..." number sets the code itself)
+  const phoneBlur = () => {
+    setPhoneTouched(true);
+    if (!phoneCheck.ok) return;
+    if (phone.trim().startsWith("+")) {
+      // a number typed with its own "+code" sets the calling code, unless the selected one already has that code
+      const code = parsePhoneNumberFromString(phoneCheck.e164)?.countryCallingCode;
+      if (code && (!dial || countryByCode(dial)?.dial !== code)) { dialPicked.current = true; setDial(mainCountry(code) ?? phoneCheck.country ?? null); }
+    }
+    setPhone(phoneCheck.national);
+  };
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (busy) return;
@@ -82,13 +113,16 @@ export default function LoginPage() {
       setError("Please enter your first name and last name.");
       return;
     }
+    if (mode === "register") setTriedSubmit(true);
+    if (mode === "register" && !country) { setError(COUNTRY_ERROR); return; }
+    if (mode === "register" && !phoneCheck.ok) { setPhoneTouched(true); phoneInput.current?.focus(); return; }
     const weak = mode === "register" ? passwordError(password) : null;
     if (weak) { setError(weak); return; }
     if (mode === "register" && password !== confirm) { setError("The two passwords don't match."); return; }
     setBusy(true); setError(null); setInfo(null);
     try {
       if (mode === "register") {
-        await api.auth.register({ email, password, firstName: firstName.trim(), lastName: lastName.trim(), referralCode: ref, remember });
+        await api.auth.register({ email, password, firstName: firstName.trim(), lastName: lastName.trim(), country: country!, phone: phoneCheck.ok ? phoneCheck.e164 : "", referralCode: ref, remember });
         setBusy(false);
         goVerify();
         return;
@@ -243,6 +277,21 @@ export default function LoginPage() {
                   <input id="email" aria-label="Email" className={input} type="email" placeholder="Email Address" required value={email}
                     onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
                 </Field>
+                {register && (
+                  <>
+                    <CountryPicker variant="country" ariaLabel="Country" placeholder="Country" value={country} onChange={pickCountry} invalid={triedSubmit && !country} />
+                    <div>
+                      <div className={`flex items-stretch rounded-2xl border bg-white/5 transition-colors focus-within:border-violet-400 focus-within:ring-2 focus-within:ring-violet-500/30 ${phoneTouched && !phoneCheck.ok ? "border-red-400/60" : "border-white/15"}`}>
+                        <CountryPicker variant="dial" ariaLabel="Phone country code" value={dial} onChange={pickDial} returnFocus={false} className="flex shrink-0 border-r border-white/15" />
+                        <input id="phone" ref={phoneInput} aria-label="Phone number" aria-invalid={phoneTouched && !phoneCheck.ok} type="tel" inputMode="tel" autoComplete="tel-national" placeholder="Phone Number" required maxLength={20} value={phone}
+                          onChange={(e) => setPhone(e.target.value.replace(/[^\d+\s().-]/g, ""))} onBlur={phoneBlur}
+                          className="min-w-0 flex-1 bg-transparent py-3.5 pl-3.5 pr-10 text-sm text-white outline-none placeholder:text-white/45" />
+                        {phoneCheck.ok && <Check size={18} aria-label="Valid phone number" className="my-auto mr-3.5 shrink-0 text-emerald-400" />}
+                      </div>
+                      {phoneTouched && !phoneCheck.ok && <p role="alert" className="mt-1.5 px-1 text-xs text-red-300">{phoneCheck.message}</p>}
+                    </div>
+                  </>
+                )}
                 {register ? (
                   <>
                     <div className="grid grid-cols-2 gap-3">

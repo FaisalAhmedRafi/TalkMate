@@ -177,7 +177,7 @@ export const api = {
   },
   auth: {
     login: (b: { email: string; password: string; remember?: boolean }) => post<{ token: string }>("/auth/login", b),
-    register: (b: { email: string; password: string; firstName: string; lastName: string; referralCode?: string; remember?: boolean }) => post<{ verify: true; email: string }>("/auth/register", b),
+    register: (b: { email: string; password: string; firstName: string; lastName: string; country: string; phone: string; referralCode?: string; remember?: boolean }) => post<{ verify: true; email: string }>("/auth/register", b),
     verifyEmail: (b: { email: string; code: string; remember?: boolean }) => post<{ token: string }>("/auth/verify-email", b),
     resendVerification: (email: string) => post<{ ok: true }>("/auth/resend-verification", { email }),
     google: (b: { credential: string; referralCode?: string; remember?: boolean }) => post<{ token: string }>("/auth/google", b),

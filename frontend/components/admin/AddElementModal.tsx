@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ImagePlus, Loader2, X } from "lucide-react";
 import { ErrorText, Modal } from "@/components/Modal";
+import { AdminSelect } from "./AdminSelect";
 import { admin, COURSE_OPTIONS, fileToDataUrl, FORMS, type Counts, type Field, type ModeInfo, type Overview, type Row } from "@/lib/admin";
 
 type Values = Record<string, any>;
@@ -162,10 +163,11 @@ export function AddElementModal({ info, overview, edit, onChanged, onClose, onTo
               {f.kind === "unit" && (
                 <>
                   <Label f={f}>
-                    <select className={input} value={String(values.unit)} onChange={(e) => set("unit", Number(e.target.value))}>
-                      {units.map((u) => <option key={u.number} value={u.number}>{info.mode === "photo" ? `Unit ${u.number}` : `Unit ${u.number} · ${u.title}`}</option>)}
-                      <option value={nextUnit}>+ New unit ({nextUnit})</option>
-                    </select>
+                    <AdminSelect value={String(values.unit)} onChange={(v) => set("unit", Number(v))}
+                      options={[
+                        ...units.map((u) => ({ value: String(u.number), label: info.mode === "photo" ? `Unit ${u.number}` : `Unit ${u.number} · ${u.title}` })),
+                        { value: String(nextUnit), label: `+ New unit (${nextUnit})` },
+                      ]} />
                   </Label>
                   {needsUnitTitle && (
                     <input className={`${input} mt-2`} placeholder={`Title of unit ${nextUnit}`} value={values.unitTitle ?? ""} maxLength={60} onChange={(e) => set("unitTitle", e.target.value)} />
@@ -177,10 +179,8 @@ export function AddElementModal({ info, overview, edit, onChanged, onClose, onTo
               {f.kind === "textarea" && <Label f={f}><textarea className={`${input} ${f.tall ? "min-h-[120px] font-mono text-[13px]" : "min-h-[72px]"} resize-y`} value={values[f.key] ?? ""} placeholder={f.placeholder} onChange={(e) => set(f.key, e.target.value)} /></Label>}
               {f.kind === "select" && (
                 <Label f={f}>
-                  <select className={input} value={values[f.key] ?? ""} onChange={(e) => set(f.key, e.target.value)}>
-                    {f.optional ? <option value="">None</option> : <option value="" disabled>Choose…</option>}
-                    {options(f).map((o) => <option key={o.id} value={o.id}>{o.title}</option>)}
-                  </select>
+                  <AdminSelect value={values[f.key] ?? ""} onChange={(v) => set(f.key, v)}
+                    options={[...(f.optional ? [{ value: "", label: "None" }] : []), ...options(f).map((o) => ({ value: o.id, label: o.title }))]} />
                 </Label>
               )}
               {f.kind === "hue" && (

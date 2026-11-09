@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, FileJson, Loader2, Pencil, Plus, RotateCcw, Search, Trash2, Undo2 } from "lucide-react";
+import { ArrowLeft, FileJson, Loader2, Pencil, Plus, RotateCcw, Search, Trash2, Undo2, X } from "lucide-react";
 import { admin, type AdminMode, type Counts, type ImportResult, type Overview, type Row } from "@/lib/admin";
 import { AddElementModal } from "./AddElementModal";
+import { AdminSelect } from "./AdminSelect";
 import { ImportModal } from "./ImportModal";
 
 const PAGE = 100;
@@ -14,7 +15,7 @@ const COVERS_PER_REQUEST = 20;
  * The picture of a row. The emoji stands in until the picture is known (and stays when there is none). The picture is only
  * asked for once the row scrolls into view, so opening a long list does not look up every picture at once.
  */
-function Thumb({ row, cover, onVisible }: { row: Row; cover: string | null | undefined; onVisible: (id: string) => void }) {
+function Thumb({ row, cover, onVisible, onOpen }: { row: Row; cover: string | null | undefined; onVisible: (id: string) => void; onOpen?: (src: string) => void }) {
   const ref = useRef<HTMLSpanElement>(null);
   const [failed, setFailed] = useState(false);
   const known = !!row.image || cover !== undefined;
@@ -29,8 +30,40 @@ function Thumb({ row, cover, onVisible }: { row: Row; cover: string | null | und
   }, [known, row.id, onVisible]);
   const src = failed ? null : row.image ?? cover;
   // eslint-disable-next-line @next/next/no-img-element
+  if (src && onOpen) {
+    return (
+      <button type="button" onClick={() => onOpen(src)} aria-label={`Enlarge picture: ${row.title}`} title="Click to enlarge"
+        className="shrink-0 cursor-zoom-in rounded-md outline-none transition-transform hover:scale-110 focus-visible:ring-2 focus-visible:ring-violet-500">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={src} alt="" loading="lazy" onError={() => setFailed(true)} className="h-8 w-8 rounded-md object-cover" />
+      </button>
+    );
+  }
   if (src) return <img src={src} alt="" loading="lazy" onError={() => setFailed(true)} className="h-8 w-8 shrink-0 rounded-md object-cover" />;
   return <span ref={ref} className="grid h-8 w-8 shrink-0 place-items-center text-lg leading-none">{row.emoji}</span>;
+}
+
+/** A pop-up with the picture shown large. Closes with the X, a click outside the picture, or Escape. */
+function PhotoLightbox({ src, title, onClose }: { src: string; title: string; onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { window.removeEventListener("keydown", onKey); document.body.style.overflow = prev; };
+  }, [onClose]);
+  return (
+    <div role="dialog" aria-modal="true" aria-label={title} onClick={onClose}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm sm:p-8">
+      <div onClick={(e) => e.stopPropagation()} className="relative flex max-h-full max-w-full flex-col items-center">
+        <button type="button" onClick={onClose} autoFocus aria-label="Close picture" title="Close"
+          className="absolute -right-2 -top-2 z-10 grid h-9 w-9 place-items-center rounded-full bg-white text-black shadow-lg hover:bg-white/90 sm:-right-4 sm:-top-4"><X size={18} /></button>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={src} alt={title} className="max-h-[85vh] max-w-full rounded-2xl object-contain shadow-2xl ring-1 ring-white/10" />
+        <p className="mt-3 max-w-full truncate text-sm text-white/70">{title}</p>
+      </div>
+    </div>
+  );
 }
 
 export function AdminPanel() {
@@ -47,6 +80,7 @@ export function AdminPanel() {
   const [editing, setEditing] = useState<Row | null>(null);
   const [importing, setImporting] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [zoom, setZoom] = useState<{ src: string; title: string } | null>(null); // Photo mode: the picture shown large
 
   // pictures for the rows (id -> url, null = none): asked for in small batches as rows scroll into view
   const [covers, setCovers] = useState<Record<string, string | null>>({});
@@ -90,7 +124,7 @@ export function AdminPanel() {
     gen.current++; asked.current.clear(); pending.current.clear(); setCovers({}); // search words may have changed: look the pictures up again
     admin.items(m).then((r) => setRows(r.rows)).catch((e) => setError(e.message));
   }, []);
-  useEffect(() => { load(mode); setQ(""); setGroup(""); setCustomOnly(false); setChangedOnly(false); setShown(PAGE); }, [mode, load]);
+  useEffect(() => { load(mode); setZoom(null); setQ(""); setGroup(""); setCustomOnly(false); setChangedOnly(false); setShown(PAGE); }, [mode, load]);
 
   const info = overview?.modes.find((m) => m.mode === mode);
   const patchInfo = (u: Counts) =>
@@ -159,11 +193,8 @@ export function AdminPanel() {
               className="w-full rounded-lg border border-white/10 bg-[#171827] py-2 pl-9 pr-3 text-sm outline-none placeholder:text-white/30 focus:ring-2 focus:ring-violet-500" />
           </div>
           {groups.length > 1 && (
-            <select value={group} onChange={(e) => setGroup(e.target.value)} aria-label="Filter"
-              className="max-w-[220px] rounded-lg border border-white/10 bg-[#171827] px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-violet-500">
-              <option value="">All groups</option>
-              {groups.map((g) => <option key={g} value={g}>{g}</option>)}
-            </select>
+            <AdminSelect variant="compact" ariaLabel="Filter" value={group} onChange={setGroup} className="w-[220px] max-w-full"
+              options={[{ value: "", label: "All groups" }, ...groups.map((g) => ({ value: g, label: g }))]} />
           )}
           <label className="flex cursor-pointer select-none items-center gap-2 rounded-lg px-2 py-2 text-sm text-white/70">
             <input type="checkbox" checked={customOnly} onChange={(e) => setCustomOnly(e.target.checked)} className="accent-violet-500" /> Added by admin
@@ -197,7 +228,7 @@ export function AdminPanel() {
                 <ul className="divide-y divide-white/[0.05]">
                   {filtered.slice(0, shown).map((r) => (
                     <li key={r.id} className={`group flex items-center gap-3 px-4 py-1.5 text-sm hover:bg-white/[0.03] ${r.status === "deleted" ? "opacity-50" : ""}`}>
-                      <Thumb row={r} cover={covers[r.id]} onVisible={wantCover} />
+                      <Thumb row={r} cover={covers[r.id]} onVisible={wantCover} onOpen={mode === "photo" ? (src) => setZoom({ src, title: r.title }) : undefined} />
                       <span className={`w-[34%] min-w-0 shrink-0 truncate font-medium sm:w-[26%] ${r.status === "deleted" ? "line-through" : ""}`} title={r.title}>{r.title}</span>
                       <span className="hidden min-w-0 flex-1 truncate text-white/45 md:block" title={r.sub}>{r.sub}</span>
                       <span className="ml-auto max-w-[40%] shrink-0 truncate rounded-md bg-white/[0.06] px-2 py-0.5 text-[11px] text-white/60 md:ml-0 md:max-w-[200px]" title={r.group}>{r.group}</span>
@@ -239,6 +270,7 @@ export function AdminPanel() {
       {adding && info && overview && <AddElementModal info={info} overview={overview} onClose={() => { setAdding(false); load(mode); }} onChanged={patchInfo} onToast={setToast} />}
       {editing && info && overview && <AddElementModal info={info} overview={overview} edit={editing} onClose={() => { setEditing(null); load(mode); }} onChanged={patchInfo} onToast={setToast} />}
       {importing && info && <ImportModal info={info} onClose={() => setImporting(false)} onDone={onImported} />}
+      {zoom && <PhotoLightbox src={zoom.src} title={zoom.title} onClose={() => setZoom(null)} />}
       {toast && <div role="status" className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full bg-white px-4 py-2 text-sm font-medium text-black shadow-lg">{toast}</div>}
     </div>
   );
