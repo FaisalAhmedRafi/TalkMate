@@ -295,17 +295,27 @@ model SupportMessage {
   @@index([createdAt])
 }
 
-/// An element added from the admin panel (/admin) on top of the built-in catalogs in src/<mode>/<mode>.catalog.ts.
-/// `mode` is sentence | word | flashcards | dialogue | debate | characters | roleplay | photo; `itemId` is the same URL slug
-/// the built-in items use (so it keys the learners' progress rows). `data` is the validated item (see src/admin/admin.content.ts).
-model CustomContent {
+/// ALL the content of the eight content modes (sentence | word | flashcards | dialogue | debate | characters | roleplay | photo):
+/// the built-in elements AND the ones added from the admin panel (/admin). This table is the single source of truth.
+/// `itemId` is the URL slug (/word/friend, photo-3) and the key of learners' progress rows, so it never changes.
+/// `data` is the validated element (see src/content/content.defs.ts; pictures also hold `file` + a data URL in `image`).
+/// `seeded` = a built-in element (loaded by the migration 20261108150000_content_builtin_data; no content lives in the code).
+/// `edited` = a built-in element an admin changed (Reset puts `original` back). `deleted` = hidden from learners: a deleted
+/// built-in element stays as a row so it can be restored. An added (not seeded) element is deleted for good instead.
+model ContentItem {
   id        String   @id @default(cuid())
   mode      String
   itemId    String
+  position  Int? // order within the mode (units are ordered by number first); null sorts last
   data      Json
+  original  Json? // a built-in element exactly as first defined (what Reset / Restore put back); null for added ones
+  seeded    Boolean  @default(false)
+  edited    Boolean  @default(false)
+  deleted   Boolean  @default(false)
   createdBy String? // email of the admin who added it
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([mode, itemId])
-  @@index([mode, createdAt])
+  @@index([mode, position])
 }

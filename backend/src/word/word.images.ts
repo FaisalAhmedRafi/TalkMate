@@ -28,7 +28,7 @@ type Saved = { id: number; user: string; page: string };
 @Injectable()
 export class WordImageService {
   private readonly log = new Logger(WordImageService.name);
-  private readonly cache = new Map<string, WordImage>();
+  private readonly cache = new Map<string, { query: string; image: WordImage }>(); // keyed by the caller's key; a changed search text is a miss
   private readonly dir = join(MEDIA_DIR, 'pixabay');
   private readonly indexFile = join(this.dir, 'index.json');
   private index: Record<string, Saved> = {};
@@ -53,11 +53,11 @@ export class WordImageService {
   async search(cacheKey: string, query: string): Promise<WordImage | null> {
     if (!query.trim()) return null;
     const hit = this.cache.get(cacheKey);
-    if (hit) return hit;
+    if (hit && hit.query === query) return hit.image;
     const pixabay = (this.cfg.get<string>('PIXABAY_API_KEY') || '').trim();
     const pexels = (this.cfg.get<string>('PEXELS_API_KEY') || '').trim();
     const image = (pixabay && (await this.fromPixabay(pixabay, query))) || (pexels && (await this.fromPexels(pexels, query))) || null;
-    if (image) this.cache.set(cacheKey, image);
+    if (image) this.cache.set(cacheKey, { query, image });
     return image;
   }
 

@@ -8,6 +8,7 @@ import { AiModule } from './ai/ai.module';
 import { AuthModule } from './auth/auth.module';
 import { CallModule } from './call/call.module';
 import { ChatModule } from './chat/chat.module';
+import { ContentModule } from './content/content.module';
 import { CharactersModule } from './characters/characters.module';
 import { DebateModule } from './debate/debate.module';
 import { DialogueModule } from './dialogue/dialogue.module';
@@ -33,6 +34,7 @@ class HealthController {
     // Free OpenRouter models are rate limited, so throttle per client too.
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 20 }]),
     PrismaModule,
+    ContentModule, // the content of the eight modes, loaded from the database
     AuthModule,
     ProgressModule,
     AccountModule,

@@ -6,11 +6,17 @@ const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
 export type AdminMode = "sentence" | "word" | "flashcards" | "dialogue" | "debate" | "characters" | "roleplay" | "photo";
 export type Unit = { number: number; title: string };
-export type ModeInfo = { mode: AdminMode; label: string; total: number; custom: number; units: Unit[] | null };
+export type ModeInfo = { mode: AdminMode; label: string; total: number; custom: number; /** built-in elements an admin edited or deleted */ changed: number; units: Unit[] | null };
+/** The counts every change answers with. */
+export type Counts = { total: number; custom: number; changed: number; units: Unit[] | null };
 export type Overview = { modes: ModeInfo[]; roleplayCategories: string[]; characterKinds: string[] };
-export type Row = { id: string; title: string; sub: string; emoji: string; group: string; custom: boolean; image?: string | null };
+export type Row = {
+  id: string; title: string; sub: string; emoji: string; group: string; custom: boolean; image?: string | null;
+  /** built-in elements only: edited (can be reset) or deleted (can be restored) */
+  status?: "edited" | "deleted";
+};
 export type ImportResult = {
-  created: number; failed: number; total: number; custom: number; units: Unit[] | null;
+  created: number; failed: number; total: number; custom: number; changed: number; units: Unit[] | null;
   results: { index: number; ok: boolean; id?: string; error?: string }[];
 };
 
@@ -38,15 +44,21 @@ export const admin = {
   me: () => call<{ admin: boolean; configured: boolean }>("GET", "/admin/me"),
   overview: () => call<Overview>("GET", "/admin/overview"),
   items: (mode: AdminMode) => call<{ mode: AdminMode; rows: Row[] }>("GET", `/admin/items?mode=${mode}`),
+  /** Pictures for some rows (at most 24 ids); null = none, keep the emoji. */
+  covers: (mode: AdminMode, ids: string[]) =>
+    call<{ covers: Record<string, string | null> }>("GET", `/admin/covers?mode=${mode}&ids=${ids.map(encodeURIComponent).join(",")}`),
   create: (mode: AdminMode, item: unknown) =>
-    call<{ ok: true; id: string; total: number; custom: number; units: Unit[] | null }>("POST", "/admin/items", { mode, item }),
+    call<{ ok: true; id: string } & Counts>("POST", "/admin/items", { mode, item }),
   import: (mode: AdminMode, items: unknown[]) => call<ImportResult>("POST", "/admin/import", { mode, items }),
-  /** One added element, shaped for the form (lists as one line per entry). */
+  /** One element (added or built-in), shaped for the form (lists as one line per entry). */
   get: (mode: AdminMode, id: string) => call<{ mode: AdminMode; id: string; item: Record<string, any> }>("GET", `/admin/items/${mode}/${encodeURIComponent(id)}`),
   update: (mode: AdminMode, id: string, item: unknown) =>
-    call<{ ok: true; id: string; total: number; custom: number; units: Unit[] | null }>("PATCH", `/admin/items/${mode}/${encodeURIComponent(id)}`, { item }),
+    call<{ ok: true; id: string } & Counts>("PATCH", `/admin/items/${mode}/${encodeURIComponent(id)}`, { item }),
   remove: (mode: AdminMode, id: string) =>
-    call<{ ok: true; total: number; custom: number; units: Unit[] | null }>("DELETE", `/admin/items/${mode}/${encodeURIComponent(id)}`),
+    call<{ ok: true } & Counts>("DELETE", `/admin/items/${mode}/${encodeURIComponent(id)}`),
+  /** Undo the changes to a built-in element: Reset after an edit, Restore after a delete. */
+  restore: (mode: AdminMode, id: string) =>
+    call<{ ok: true; id: string } & Counts>("POST", `/admin/items/${mode}/${encodeURIComponent(id)}/restore`),
 };
 
 // ---------- form definitions ----------

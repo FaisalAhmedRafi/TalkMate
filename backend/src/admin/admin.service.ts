@@ -1,47 +1,30 @@
-import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException, OnModuleInit } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { existsSync, mkdirSync, unlinkSync, writeFileSync } from 'fs';
-import { dirname, join } from 'path';
-import { PrismaService } from '../prisma/prisma.module';
-import { MEDIA_DIR } from '../word/word.images';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { CharacterPhotoService } from '../characters/characters.photos';
+import { ContentStore, IMAGE_RE, StoredItem } from '../content/content.store';
+import { AdminMode, CHARACTER_KINDS, CourseItem, DEFS, isMode, MODE_LABEL, MODES, nextPhotoId, Row, unitsOf } from '../content/content.defs';
 import { ROLEPLAY_CATEGORIES } from '../roleplay/roleplay.catalog';
-import { AdminMode, CHARACTER_KINDS, courseItems, DEFS, isMode, MODE_LABEL, MODES, nextPhotoId, Row, unitsOf } from './admin.content';
+import { WordImageService } from '../word/word.images';
 
 const MAX_IMPORT = 200;
+const MAX_COVERS = 24; // pictures per request
 const MAX_IMAGE_BYTES = 3_000_000;
-const IMAGE_RE = /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)$/;
 
+/**
+ * What the admin panel does with the content of the eight modes. The content itself lives in the database (see
+ * ContentStore); this service validates what the panel sends, keeps pictures, and answers the table and the form.
+ *
+ * Built-in elements (`seeded`, loaded by a migration) and added ones are the same rows. Deleting an added element removes
+ * its row; deleting a built-in one only hides it (`deleted`) so Restore can bring it back. Reset/Restore put back the
+ * element's `original`, the copy of it saved when it was loaded. Learners' progress rows are never touched.
+ */
 @Injectable()
-export class AdminService implements OnModuleInit {
-  private readonly log = new Logger(AdminService.name);
-  /** ids added from the panel, per mode (the rest of each catalog is built in) */
-  private readonly custom = new Map<AdminMode, Set<string>>(MODES.map((m) => [m, new Set<string>()]));
-
-  constructor(private readonly prisma: PrismaService, private readonly cfg: ConfigService) {}
-
-  /** Load every saved element into the live catalogs when the API starts. */
-  async onModuleInit() {
-    try {
-      const rows = await this.prisma.customContent.findMany({ orderBy: { createdAt: 'asc' } });
-      for (const r of rows) {
-        if (!isMode(r.mode)) continue;
-        try { this.attach(r.mode, r.data as any); } catch (e) { this.log.warn(`Skipped ${r.mode}/${r.itemId}: ${(e as Error).message}`); }
-      }
-      this.log.log(`Loaded ${rows.length} custom element(s).`);
-    } catch (e) {
-      // e.g. the migration has not been applied yet: the app must still boot with its built-in content
-      this.log.warn(`Custom content not loaded (${(e as Error).message}). Run \`npm run prisma:deploy\`.`);
-    }
-  }
+export class AdminService {
+  constructor(private readonly store: ContentStore, private readonly images: WordImageService, private readonly characterPhotos: CharacterPhotoService) {}
 
   // ---------- reading ----------
   overview() {
     return {
-      modes: MODES.map((m) => {
-        const ids = DEFS[m].ids();
-        const custom = this.custom.get(m)!.size;
-        return { mode: m, label: MODE_LABEL[m], total: ids.length, custom, units: unitsOf(m) ?? null };
-      }),
+      modes: MODES.map((m) => ({ mode: m, label: MODE_LABEL[m], ...this.countsOf(m) })),
       roleplayCategories: [...ROLEPLAY_CATEGORIES],
       characterKinds: CHARACTER_KINDS,
     };
@@ -49,8 +32,52 @@ export class AdminService implements OnModuleInit {
 
   rows(modeRaw: string): { mode: AdminMode; rows: Row[] } {
     const mode = this.mode(modeRaw);
-    const set = this.custom.get(mode)!;
-    return { mode, rows: DEFS[mode].rows((id) => set.has(id), { imageUrl: (f) => this.imageUrl(f) }) };
+    const ctx = { imageUrl: (f: string) => this.store.imageUrl(f) };
+    const list = this.store.list(mode);
+    const row = (i: StoredItem): Row => ({
+      ...DEFS[mode].rowOf(i.data, ctx),
+      id: i.itemId,
+      custom: !i.seeded,
+      ...(i.deleted ? { status: 'deleted' as const } : i.seeded && i.edited ? { status: 'edited' as const } : {}),
+    });
+    // deleted built-in elements go to the end of the table, where Restore is
+    return { mode, rows: [...list.filter((i) => !i.deleted).map(row), ...list.filter((i) => i.deleted).map(row)] };
+  }
+
+  /**
+   * The pictures for some rows of the table, which shows them instead of the emoji. Each mode finds its picture the way the
+   * learner screens do (same search words, same cache keys), so a picture already shown to learners is not looked up again.
+   * `null` = no picture (no stock-photo key set, nothing found): the table keeps the emoji.
+   */
+  async covers(modeRaw: string, ids: string[]): Promise<{ covers: Record<string, string | null> }> {
+    const mode = this.mode(modeRaw);
+    const list = [...new Set(ids)].slice(0, MAX_COVERS);
+    const covers: Record<string, string | null> = {};
+    if (mode === 'characters' && list.length) await this.characterPhotos.ensure().catch(() => undefined); // waits at most 8 s
+    let next = 0;
+    const worker = async () => { // a few at a time: stock-photo APIs have rate limits
+      while (next < list.length) {
+        const id = list[next++];
+        covers[id] = await this.coverOf(mode, id).catch(() => null);
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(4, list.length) }, worker));
+    return { covers };
+  }
+
+  private async coverOf(mode: AdminMode, id: string): Promise<string | null> {
+    const d = this.store.find(mode, id)?.data;
+    if (!d) return null;
+    if (d.file) return this.store.imageUrl(d.file); // a picture uploaded in the panel
+    switch (mode) {
+      case 'photo': return d.url ?? null; // a built-in photo: a path in the frontend's public folder
+      case 'characters': return this.characterPhotos.cover(id); // the Wikipedia picture, once downloaded
+      case 'word': return (await this.images.search(id, d.photo ?? ''))?.url ?? null;
+      default: {
+        const key = `${mode === 'flashcards' ? 'flash' : mode}-cover:${id}`;
+        return (await this.images.search(key, d.photo ?? ''))?.url ?? null;
+      }
+    }
   }
 
   // ---------- writing ----------
@@ -58,14 +85,13 @@ export class AdminService implements OnModuleInit {
     const mode = this.mode(modeRaw);
     const data = await this.prepare(mode, raw);
     try {
-      await this.prisma.customContent.create({ data: { mode, itemId: data.id, data, createdBy: email } });
+      await this.store.insert(mode, data, email);
     } catch (e: any) {
-      this.discardFile(data);
+      this.store.discardFile(data);
       if (e?.code === 'P2002') throw new ConflictException(`"${data.id}" already exists.`);
       throw e;
     }
-    this.attach(mode, data);
-    return { ok: true, id: data.id, ...this.overviewOf(mode) };
+    return { ok: true, id: data.id, ...this.countsOf(mode) };
   }
 
   /** Several elements at once. Each one is checked on its own; the bad ones are reported and skipped. */
@@ -84,77 +110,109 @@ export class AdminService implements OnModuleInit {
         results.push({ index: i, ok: false, error: Array.isArray(m) ? m.join(', ') : String(m) });
       }
     }
-    return { created: results.filter((r) => r.ok).length, failed: results.filter((r) => !r.ok).length, results, ...this.overviewOf(mode) };
+    return { created: results.filter((r) => r.ok).length, failed: results.filter((r) => !r.ok).length, results, ...this.countsOf(mode) };
   }
 
-  /** Delete an element that was added from the panel. Built-in elements cannot be deleted. */
+  /** Delete an element: an added one for good, a built-in one by hiding it (Restore brings it back). */
   async remove(modeRaw: string, itemId: string) {
     const mode = this.mode(modeRaw);
-    if (!this.custom.get(mode)!.has(itemId)) {
-      if (DEFS[mode].ids().includes(itemId)) throw new BadRequestException('Built-in elements cannot be deleted here.');
-      throw new NotFoundException('Unknown element.');
+    const item = this.existing(mode, itemId);
+    if (item.deleted) throw new BadRequestException('It is already deleted. Use Restore to bring it back.');
+    if (!item.seeded) {
+      await this.store.hardDelete(mode, itemId);
+      this.store.discardFile(item.data);
+    } else {
+      // hidden, with the original text: Restore then simply shows it again. Its edits (and an uploaded picture) go.
+      const original = item.original;
+      await this.store.save(mode, itemId, { deleted: true, edited: false, ...(original ? { data: original } : {}) });
+      if (item.data?.file && item.data.file !== original?.file) this.store.discardFile(item.data);
     }
-    const row = await this.prisma.customContent.findUnique({ where: { mode_itemId: { mode, itemId } } });
-    await this.prisma.customContent.deleteMany({ where: { mode, itemId } });
-    if (row) this.discardFile(row.data as any);
-    await this.rebuild(mode); // units that only this element created disappear too
-    return { ok: true, ...this.overviewOf(mode) };
+    return { ok: true, ...this.countsOf(mode) };
   }
 
-  /** One added element as the form shows it (lists become one line per entry, a script becomes Partner:/You: lines). */
-  async get(modeRaw: string, itemId: string) {
+  /** One element as the edit form shows it (lists become one line per entry, a script becomes Partner:/You: lines). */
+  get(modeRaw: string, itemId: string) {
     const mode = this.mode(modeRaw);
-    const row = await this.prisma.customContent.findUnique({ where: { mode_itemId: { mode, itemId } } });
-    if (!row) {
-      if (DEFS[mode].ids().includes(itemId)) throw new BadRequestException('Built-in elements cannot be edited here.');
-      throw new NotFoundException('Unknown element.');
-    }
-    return { mode, id: itemId, item: this.formOf(row.data as any) };
+    const item = this.existing(mode, itemId);
+    if (item.deleted) throw new BadRequestException('It is deleted. Restore it first.');
+    return { mode, id: itemId, item: this.formOf(item.data) };
   }
 
   /**
-   * Change an element that was added from the panel. Its id (the web address and the key of learners' progress) never changes,
-   * so progress keeps counting. A photo or portrait is kept unless a new picture is sent (or `removeImage` for a portrait).
+   * Change an element, built-in or added. Its id (the web address and the key of learners' progress) never changes, so
+   * progress keeps counting. A picture is kept unless a new one is sent (or `removeImage` for a character portrait).
    */
   async update(modeRaw: string, itemId: string, raw: any) {
     const mode = this.mode(modeRaw);
-    if (!this.custom.get(mode)!.has(itemId)) {
-      if (DEFS[mode].ids().includes(itemId)) throw new BadRequestException('Built-in elements cannot be edited here.');
-      throw new NotFoundException('Unknown element.');
+    const item = this.existing(mode, itemId);
+    if (item.deleted) throw new BadRequestException('It is deleted. Restore it first.');
+    const old = item.data;
+    const data = await this.prepare(mode, raw, old, item.seeded);
+    try {
+      await this.store.save(mode, itemId, { data, ...(item.seeded ? { edited: true } : {}) });
+    } catch (e) {
+      if (data.file && data.file !== old.file) this.store.discardFile(data);
+      throw e;
     }
-    const row = await this.prisma.customContent.findUnique({ where: { mode_itemId: { mode, itemId } } });
-    if (!row) throw new NotFoundException('Unknown element.');
-    const old = row.data as any;
-    const data = await this.prepare(mode, raw, old);
-    await this.prisma.customContent.update({ where: { mode_itemId: { mode, itemId } }, data: { data } });
-    if (old.file && old.file !== data.file) this.discardFile(old);
-    await this.rebuild(mode);
-    return { ok: true, id: itemId, ...this.overviewOf(mode) };
+    if (old.file && old.file !== data.file) this.store.discardFile(old);
+    return { ok: true, id: itemId, ...this.countsOf(mode) };
   }
 
-  /** What the Learn paths need: every added Word, Sentence or Dialogue element that picked a course. */
-  courseItems() { return { items: courseItems() }; }
+  /** Put a built-in element back as the code defines it: Reset after an edit, Restore after a delete. */
+  async restore(modeRaw: string, itemId: string) {
+    const mode = this.mode(modeRaw);
+    const item = this.existing(mode, itemId);
+    if (!item.seeded || (!item.edited && !item.deleted)) throw new NotFoundException('Nothing to undo: this element is unchanged.');
+    const original = item.original;
+    if (!original && !item.deleted) throw new BadRequestException('No original was saved for this element, so there is nothing to reset to.');
+    await this.store.save(mode, itemId, { deleted: false, edited: false, ...(original ? { data: original } : {}) });
+    if (!item.deleted && item.data?.file && item.data.file !== original?.file) this.store.discardFile(item.data);
+    return { ok: true, id: itemId, ...this.countsOf(mode) };
+  }
+
+  /**
+   * What the Learn paths need: the elements that asked to be part of a course (`items`), and the built-in words, sentences
+   * and dialogues an admin deleted (`removed`), which the fixed course paths in the frontend still list.
+   */
+  courseItems(): { items: CourseItem[]; removed: { mode: string; id: string }[] } {
+    const items: CourseItem[] = [];
+    const removed: { mode: string; id: string }[] = [];
+    for (const mode of ['sentence', 'word', 'dialogue'] as const) {
+      for (const i of this.store.list(mode)) {
+        if (i.deleted) { if (i.seeded) removed.push({ mode, id: i.itemId }); continue; }
+        if (!i.data?.course) continue;
+        items.push({ mode, id: i.itemId, title: mode === 'word' ? i.data.english : i.data.title, course: i.data.course });
+      }
+    }
+    return { items, removed };
+  }
 
   // ---------- helpers ----------
-  /** Rebuild one mode's live catalog from the database. */
-  private async rebuild(mode: AdminMode) {
-    DEFS[mode].clear();
-    this.custom.get(mode)!.clear();
-    const rows = await this.prisma.customContent.findMany({ where: { mode }, orderBy: { createdAt: 'asc' } });
-    for (const r of rows) { try { this.attach(mode, r.data as any); } catch (e) { this.log.warn(`Skipped ${mode}/${r.itemId}: ${(e as Error).message}`); } }
+  private existing(mode: AdminMode, itemId: string): StoredItem {
+    const item = this.store.find(mode, itemId);
+    if (!item) throw new NotFoundException('Unknown element.');
+    return item;
+  }
+
+  private countsOf(mode: AdminMode) {
+    const list = this.store.list(mode);
+    return {
+      total: list.filter((i) => !i.deleted).length,
+      custom: list.filter((i) => !i.deleted && !i.seeded).length,
+      /** built-in elements an admin edited or deleted */
+      changed: list.filter((i) => i.seeded && (i.edited || i.deleted)).length,
+      units: unitsOf(mode) ?? null,
+    };
   }
 
   private formOf(d: any) {
     const f: any = { ...d };
     for (const k of ['sentences', 'examples', 'words']) if (Array.isArray(f[k])) f[k] = f[k].join('\n');
     if (Array.isArray(f.script)) f.script = f.script.map((t: any) => `Partner: ${t.partner}\nYou: ${t.you}`).join('\n');
-    if (f.file) f.imageUrl = this.imageUrl(f.file);
-    delete f.image; delete f.file; // the stored data URL is large and not needed by the form
+    if (f.file) f.imageUrl = this.store.imageUrl(f.file);
+    else if (f.url) f.imageUrl = f.url; // a built-in photo: a path in the frontend's public folder
+    delete f.url; delete f.image; delete f.file; // the stored data URL is large and not needed by the form
     return f;
-  }
-
-  private overviewOf(mode: AdminMode) {
-    return { total: DEFS[mode].ids().length, custom: this.custom.get(mode)!.size, units: unitsOf(mode) ?? null };
   }
 
   private mode(v: string): AdminMode {
@@ -162,25 +220,28 @@ export class AdminService implements OnModuleInit {
     return v;
   }
 
-  private attach(mode: AdminMode, data: any) {
-    if (data.file) this.ensureFile(data); // photos and character portraits
-    DEFS[mode].add(data, { imageUrl: (f) => this.imageUrl(f) });
-    this.custom.get(mode)!.add(data.id);
-  }
-
-  /** Validate, reject duplicates and save a picture; returns the data to store. `existing` is set when an element is being edited. */
-  private async prepare(mode: AdminMode, raw: any, existing?: any) {
+  /**
+   * Validate, reject duplicates and save a picture; returns the data to store. `existing` is the element's stored data
+   * when it is being edited (then its id and, without a new picture, its picture stay). `seeded`: a built-in element.
+   */
+  private async prepare(mode: AdminMode, raw: any, existing?: any, seeded = false) {
     if (!raw || typeof raw !== 'object') throw new BadRequestException('Send the element as an object.');
     const data = DEFS[mode].normalize(raw);
-    if (existing) data.id = existing.id; // the id never changes: it keys learners' progress and the web address
-    else if (mode !== 'photo' && DEFS[mode].ids().includes(data.id)) {
-      throw new ConflictException(`"${data.id}" already exists in ${MODE_LABEL[mode]} mode. Use a different title.`);
+    if (existing) {
+      data.id = existing.id; // the id never changes: it keys learners' progress and the web address
+    } else if (mode !== 'photo' && this.store.find(mode, data.id)) {
+      // also true for a deleted built-in element: its id must not be reused, learners' progress rows still carry it
+      const gone = this.store.find(mode, data.id)!.deleted;
+      throw new ConflictException(gone
+        ? `"${data.id}" was deleted from ${MODE_LABEL[mode]} mode. Restore it, or use a different title.`
+        : `"${data.id}" already exists in ${MODE_LABEL[mode]} mode. Use a different title.`);
     }
-    if (existing?.unitTitle && !data.unitTitle && data.unit === existing.unit) data.unitTitle = existing.unitTitle; // keep the title of a unit this element created
+    if (existing?.unitTitle && !data.unitTitle && data.unit === existing.unit) data.unitTitle = existing.unitTitle; // keep the title of the unit
+    if (seeded && 'course' in data) data.course = ''; // built-in elements are already on their courses' paths; "Add to a course" is for added ones
 
     if (mode === 'photo' || mode === 'characters') {
       const sent = typeof raw.image === 'string' && raw.image !== '';
-      if (!existing && mode === 'photo') data.id = nextPhotoId();
+      if (!existing && mode === 'photo') data.id = nextPhotoId(this.store.list('photo').map((i) => i.itemId));
       if (sent) {
         const m = IMAGE_RE.exec(raw.image);
         if (!m) throw new BadRequestException('Add a PNG, JPEG or WebP picture.');
@@ -191,36 +252,15 @@ export class AdminService implements OnModuleInit {
         // a replaced picture gets a new file name, so browsers do not keep showing the old one
         data.file = `admin-photos/${base}${existing?.file || mode === 'characters' ? `-${Date.now().toString(36)}` : ''}.${ext}`;
         data.image = raw.image; // kept in the database so the file can be restored if the media folder is wiped
-        this.writeFile(data.file, buf);
+        this.store.writeFile(data.file, buf);
       } else if (existing?.file && !(mode === 'characters' && raw.removeImage === true)) {
         data.file = existing.file; data.image = existing.image;
+      } else if (mode === 'photo' && existing?.url) {
+        data.url = existing.url; // a built-in photo keeps its own picture
       } else if (mode === 'photo') {
         throw new BadRequestException('Add a PNG, JPEG or WebP picture.');
       }
     }
     return data;
-  }
-
-  private publicBase(): string {
-    let base = (this.cfg.get<string>('PUBLIC_API_URL') || `http://localhost:${this.cfg.get<string>('PORT') || 4000}`).trim().replace(/\/+$/, '');
-    if (!/^https?:\/\//i.test(base)) base = `https://${base}`;
-    return base;
-  }
-  private imageUrl(file: string) { return `${this.publicBase()}/media/${file}`; }
-
-  private writeFile(file: string, buf: Buffer) {
-    const path = join(MEDIA_DIR, file);
-    mkdirSync(dirname(path), { recursive: true });
-    writeFileSync(path, buf);
-  }
-  /** Re-create a photo file that is missing from disk (a redeploy without a volume) from the copy in the database. */
-  private ensureFile(data: any) {
-    if (!data?.file || existsSync(join(MEDIA_DIR, data.file))) return;
-    const m = IMAGE_RE.exec(data.image ?? '');
-    if (m) this.writeFile(data.file, Buffer.from(m[2], 'base64'));
-  }
-  private discardFile(data: any) {
-    if (!data?.file) return;
-    try { unlinkSync(join(MEDIA_DIR, data.file)); } catch { /* already gone */ }
   }
 }

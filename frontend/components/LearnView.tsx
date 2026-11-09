@@ -18,6 +18,7 @@ export function LearnView({ course, premium, onSelectCourse, onLocked }: {
   const [skills, setSkills] = useState<Record<string, SentenceSkill>>({});
   const [topics, setTopics] = useState<Record<string, DialogueTopicInfo>>({});
   const [extras, setExtras] = useState<CourseItem[]>([]); // elements added in the Admin panel that belong to a course
+  const [removed, setRemoved] = useState<Set<string>>(new Set()); // "word:friend": built-in elements an admin deleted
   const [unitCovers, setUnitCovers] = useState<Record<string, string | null>>({});
   const courseCovers = useCourseCovers(); // photos for the course picker, same ones as the Courses tab
   const [picker, setPicker] = useState(false);
@@ -33,7 +34,7 @@ export function LearnView({ course, premium, onSelectCourse, onLocked }: {
       if (s.status === "fulfilled") setSkills(Object.fromEntries(s.value.units.flatMap((x) => x.skills).map((x) => [x.id, x])));
       if (d.status === "fulfilled") setTopics(Object.fromEntries(d.value.topics.map((x) => [x.id, x])));
     });
-    api.content.courseItems().then((r) => { if (live) setExtras(r.items); }).catch(() => {}); // no extras is fine
+    api.content.courseItems().then((r) => { if (live) { setExtras(r.items); setRemoved(new Set((r.removed ?? []).map((x) => `${x.mode}:${x.id}`))); } }).catch(() => {}); // no extras is fine
     return () => { live = false; };
   }, []);
 
@@ -62,7 +63,9 @@ export function LearnView({ course, premium, onSelectCourse, onLocked }: {
     return () => { document.removeEventListener("mousedown", off); window.removeEventListener("keydown", esc); };
   }, [picker]);
 
-  const units = useMemo(() => pathFor(course, extras).map((u: Unit) => {
+  const units = useMemo(() => pathFor(course, extras).map((raw: Unit) => {
+    // exercises an admin deleted from the built-in content disappear from the path
+    const u: Unit = { ...raw, word: raw.word && !removed.has(`word:${raw.word}`) ? raw.word : null, sentence: raw.sentence && !removed.has(`sentence:${raw.sentence}`) ? raw.sentence : null, dialogue: raw.dialogue && !removed.has(`dialogue:${raw.dialogue}`) ? raw.dialogue : null };
     const w = u.word ? words[u.word] : undefined, s = u.sentence ? skills[u.sentence] : undefined, d = u.dialogue ? topics[u.dialogue] : undefined;
     const cover = unitCovers[u.title]; // same photo for all three exercises of the unit
     const all: Omit<Step, "n">[] = [];
@@ -71,7 +74,7 @@ export function LearnView({ course, premium, onSelectCourse, onLocked }: {
     if (u.dialogue) all.push({ mode: "Dialogue Mode", href: `/dialogue/${u.dialogue}`, emoji: d?.emoji ?? "💭", cover, title: d?.title ?? titleize(u.dialogue), done: !!d?.passed });
     const steps: Step[] = all.map((s, i) => ({ ...s, n: i + 1 }));
     return { title: u.title, steps };
-  }), [course, extras, words, skills, topics, unitCovers]);
+  }).filter((u) => u.steps.length > 0), [course, extras, removed, words, skills, topics, unitCovers]);
 
   const total = units.reduce((n, u) => n + u.steps.length, 0);
   const done = units.reduce((n, u) => n + u.steps.filter((s) => s.done).length, 0);

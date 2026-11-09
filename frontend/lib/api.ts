@@ -173,7 +173,7 @@ export type CourseItemInfo = import("./courses").CourseItem;
 
 export const api = {
   content: {
-    courseItems: () => request<{ items: CourseItemInfo[] }>("GET", "/content/course-items"),
+    courseItems: () => request<{ items: CourseItemInfo[]; removed?: { mode: string; id: string }[] }>("GET", "/content/course-items"),
   },
   auth: {
     login: (b: { email: string; password: string; remember?: boolean }) => post<{ token: string }>("/auth/login", b),

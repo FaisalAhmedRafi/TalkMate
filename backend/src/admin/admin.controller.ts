@@ -27,6 +27,11 @@ export class AdminController {
   @Get('items')
   items(@Query('mode') mode: string) { return this.admin.rows(mode); }
 
+  /** Pictures for some rows of the table: /admin/covers?mode=word&ids=apple,house (at most 24) -> { covers: { apple: url | null } } */
+  @UseGuards(AdminGuard)
+  @Get('covers')
+  covers(@Query('mode') mode: string, @Query('ids') ids = '') { return this.admin.covers(mode, ids.split(',').map((x) => x.trim()).filter(Boolean)); }
+
   /** Add one element. Body: { mode, item } */
   @UseGuards(AdminGuard)
   @Post('items')
@@ -37,20 +42,25 @@ export class AdminController {
   @Post('import')
   import(@Req() req: any, @Body() body: { mode: string; items: unknown }) { return this.admin.import(body?.mode, body?.items, req.user.email); }
 
-  /** One added element, shaped for the edit form */
+  /** One element, shaped for the edit form */
   @UseGuards(AdminGuard)
   @Get('items/:mode/:id')
   one(@Param('mode') mode: string, @Param('id') id: string) { return this.admin.get(mode, id); }
 
-  /** Change an element added from the panel (its id stays). Body: { item } */
+  /** Change an element, added or built-in (its id stays). Body: { item } */
   @UseGuards(AdminGuard)
   @Patch('items/:mode/:id')
   update(@Param('mode') mode: string, @Param('id') id: string, @Body() body: { item: unknown }) { return this.admin.update(mode, id, body?.item); }
 
-  /** Delete an element added from the panel */
+  /** Delete an element (an added one for good; a built-in one can be restored) */
   @UseGuards(AdminGuard)
   @Delete('items/:mode/:id')
   remove(@Param('mode') mode: string, @Param('id') id: string) { return this.admin.remove(mode, id); }
+
+  /** Undo the changes to a built-in element (Reset after an edit, Restore after a delete) */
+  @UseGuards(AdminGuard)
+  @Post('items/:mode/:id/restore')
+  restore(@Param('mode') mode: string, @Param('id') id: string) { return this.admin.restore(mode, id); }
 }
 
 /** For every learner (Learn tab): the added Word, Sentence and Dialogue elements that belong to a course. */

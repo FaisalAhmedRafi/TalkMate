@@ -9,5 +9,6 @@ import { CharactersService } from './characters.service';
   imports: [AiModule, ProgressModule],
   controllers: [CharactersController],
   providers: [CharactersService, CharacterPhotoService],
+  exports: [CharacterPhotoService], // the Admin panel shows the same pictures in its table
 })
 export class CharactersModule {}

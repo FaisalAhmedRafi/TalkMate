@@ -1,9 +1,9 @@
-// Everything the admin panel knows about the eight content modes: how an element is validated, how it is
-// listed in the compact table, and how it is pushed into the built-in catalog the mode already reads.
+// Everything the content layer knows about the eight content modes: how an element is validated (`normalize`), how stored
+// elements fill the live catalog arrays the mode services read on every request (`load`) and how an element is listed in
+// the admin table (`rowOf`).
 //
-// The catalogs (src/<mode>/<mode>.catalog.ts) are plain arrays that the mode services read on every request, so
-// custom elements are added to those same arrays in place (and removed again on delete). No mode service had to
-// learn about the database.
+// The database (table ContentItem) is the only place content lives. The catalogs (src/<mode>/<mode>.catalog.ts) hold the types,
+// the lookups and the live arrays that ContentStore fills from the database; there is no content in the code.
 
 import { BadRequestException } from '@nestjs/common';
 import { createHash } from 'crypto';
@@ -33,6 +33,8 @@ export type Row = {
   id: string; title: string; sub: string; emoji: string;
   /** unit / category / kind, shown as a small chip and used by the filter */
   group: string; custom: boolean; image?: string | null;
+  /** built-in elements only: `edited` = an admin changed it (can be reset), `deleted` = an admin removed it (can be restored) */
+  status?: 'edited' | 'deleted';
 };
 
 // ---------- small validators ----------
@@ -109,14 +111,10 @@ function courseId(v: unknown): string {
   return s;
 }
 
-// Elements that asked to be part of a course, kept in step with the live catalogs (see courseItems()).
+
+/** What the Learn paths need to know about an element that asked to be part of a course (see COURSES in frontend/lib/courses.ts). */
 export type CourseItem = { mode: 'sentence' | 'word' | 'dialogue'; id: string; title: string; course: string };
-const courseLinks = new Map<string, CourseItem>();
-const link = (mode: CourseItem['mode'], d: { id: string; course?: string }, title: string) => {
-  if (d.course) courseLinks.set(`${mode}:${d.id}`, { mode, id: d.id, title, course: d.course });
-};
-const unlink = (mode: CourseItem['mode']) => { for (const k of [...courseLinks.keys()]) if (k.startsWith(`${mode}:`)) courseLinks.delete(k); };
-export const courseItems = (): CourseItem[] => [...courseLinks.values()];
+
 const rev = (d: unknown) => createHash('md5').update(JSON.stringify(d)).digest('hex').slice(0, 8);
 
 /** Existing unit number, or the next free one (which then needs a title). */
@@ -129,51 +127,43 @@ function resolveUnit(raw: unknown, numbers: number[], titleRaw: unknown, needsTi
 }
 
 // ---------- the per-mode definitions ----------
+export type Ctx = { imageUrl: (file: string) => string };
+/** An element as stored in ContentItem (`data` is what `normalize` returned). */
+export type Stored = { itemId: string; data: any };
+/** A table row without the flags the admin service adds (custom, status). */
+export type RowBody = Omit<Row, 'custom' | 'status'>;
+
 type Def = {
   /** validate a raw payload and return the data to store (including its `id`); throws BadRequestException */
   normalize(raw: any): any;
-  /** put a stored item into the live catalog */
-  add(d: any, ctx: { imageUrl: (file: string) => string }): void;
-  /** take every custom item out of the live catalog again */
-  clear(): void;
-  /** the compact table, built-in and custom together */
-  rows(isCustom: (id: string) => boolean, ctx: { imageUrl: (file: string) => string }): Row[];
-  /** every id currently in the live catalog, to reject duplicates */
-  ids(): string[];
+  /** rebuild the live catalog from these stored elements (not deleted ones, already in order) */
+  load(items: Stored[], ctx: Ctx): void;
+  /** the compact table line of one stored element (works for deleted ones too) */
+  rowOf(d: any, ctx: Ctx): RowBody;
 };
 
-// Units created by the admin panel are removed again on clear(); remember which they are.
-const createdUnits: Record<'sentence' | 'word' | 'photo', Set<number>> = { sentence: new Set(), word: new Set(), photo: new Set() };
+const swap = <T,>(arr: T[], next: T[]) => { arr.splice(0, arr.length, ...next); };
 
-function removeFromUnits<U extends { number: number }>(units: U[], kind: 'sentence' | 'word' | 'photo', items: (u: U) => any[], isCustom: (x: any) => boolean) {
-  for (const u of units) {
-    const list = items(u);
-    for (let i = list.length - 1; i >= 0; i--) if (isCustom(list[i])) list.splice(i, 1);
+/** Group stored elements into units by `data.unit` (sorted by number). A unit's title is the first `unitTitle` found among its elements. */
+function buildUnits<U, I>(items: Stored[], toItem: (d: any, id: string) => I, make: (number: number, title: string, list: I[]) => U): U[] {
+  const by = new Map<number, { title: string; list: I[] }>();
+  for (const it of items) {
+    const n = Number(it.data?.unit);
+    if (!Number.isInteger(n)) continue;
+    let u = by.get(n);
+    if (!u) { u = { title: '', list: [] }; by.set(n, u); }
+    if (!u.title && typeof it.data.unitTitle === 'string') u.title = it.data.unitTitle;
+    u.list.push(toItem(it.data, it.itemId));
   }
-  for (let i = units.length - 1; i >= 0; i--) if (createdUnits[kind].has(units[i].number) && items(units[i]).length === 0) units.splice(i, 1);
-  createdUnits[kind].clear();
+  return [...by.entries()].sort((a, b) => a[0] - b[0]).map(([n, u]) => make(n, u.title || `Unit ${n}`, u.list));
 }
-function unitFor<U extends { number: number }>(units: U[], kind: 'sentence' | 'word' | 'photo', d: any, make: () => U): U {
-  let u = units.find((x) => x.number === d.unit);
-  if (!u) { u = make(); units.push(u); units.sort((a, b) => a.number - b.number); createdUnits[kind].add(d.unit); }
-  return u;
-}
-
-const customSentence = new Set<string>();
-const customWord = new Set<string>();
-const customPhoto = new Set<string>();
-const customFlash = new Set<string>();
-const customDialogue = new Set<string>();
-const customDebate = new Set<string>();
-const customCharacter = new Set<string>();
-const customRoleplay = new Set<string>();
-
-function dropFrom<T extends { id: string }>(arr: T[], ids: Set<string>) {
-  for (let i = arr.length - 1; i >= 0; i--) if (ids.has(arr[i].id)) arr.splice(i, 1);
-  ids.clear();
-}
+const unitGroup = (units: { number: number; title?: string }[], n: number) => {
+  const t = units.find((u) => u.number === n)?.title;
+  return t && t !== `Unit ${n}` ? `Unit ${n} · ${t}` : `Unit ${n}`;
+};
 
 export const DEFS: Record<AdminMode, Def> = {
+
   sentence: {
     normalize: (raw) => {
       const title = str(raw?.title, 'Title', 80);
@@ -183,23 +173,13 @@ export const DEFS: Record<AdminMode, Def> = {
         sentences: lines(raw?.sentences, 'Sentences', 3, 5, 200), course: courseId(raw?.course),
       };
     },
-    add: (d) => {
-      const u = unitFor(SENTENCE_UNITS, 'sentence', d, () => ({ number: d.unit, title: d.unitTitle || `Unit ${d.unit}`, skills: [] }));
-      u.skills.push({ id: d.id, title: d.title, emoji: d.emoji, description: d.description, ...(d.sentences?.length ? { sentences: d.sentences } : {}) });
-      if (d.photo) SENTENCE_PHOTO[d.id] = d.photo;
-      link('sentence', d, d.title);
-      customSentence.add(d.id);
+    load: (items) => {
+      swap(SENTENCE_UNITS, buildUnits(items, (d, id) => ({ id, title: d.title, emoji: d.emoji, description: d.description, ...(d.sentences?.length ? { sentences: d.sentences } : {}) }),
+        (number, title, skills) => ({ number, title, skills })));
+      for (const k of Object.keys(SENTENCE_PHOTO)) delete SENTENCE_PHOTO[k];
+      for (const it of items) if (it.data.photo) SENTENCE_PHOTO[it.itemId] = it.data.photo;
     },
-    clear: () => {
-      for (const id of customSentence) delete SENTENCE_PHOTO[id];
-      unlink('sentence');
-      removeFromUnits(SENTENCE_UNITS, 'sentence', (u) => u.skills, (k) => customSentence.has(k.id));
-      customSentence.clear();
-    },
-    rows: (isCustom) => SENTENCE_UNITS.flatMap((u) => u.skills.map((k) => ({
-      id: k.id, title: k.title, sub: k.description, emoji: k.emoji, group: `Unit ${u.number} · ${u.title}`, custom: isCustom(k.id),
-    }))),
-    ids: () => SENTENCE_UNITS.flatMap((u) => u.skills.map((k) => k.id)),
+    rowOf: (d) => ({ id: d.id, title: d.title, sub: d.description, emoji: d.emoji, group: unitGroup(SENTENCE_UNITS, d.unit) }),
   },
 
   word: {
@@ -210,17 +190,9 @@ export const DEFS: Record<AdminMode, Def> = {
         examples: lines(raw?.examples, 'Example sentences', 1, 3, 200), course: courseId(raw?.course),
       };
     },
-    add: (d) => {
-      const u = unitFor(WORD_UNITS, 'word', d, () => ({ number: d.unit, title: d.unitTitle || `Unit ${d.unit}`, words: [] }));
-      u.words.push({ id: d.id, english: d.english, emoji: d.emoji, photo: d.photo, ...(d.examples?.length ? { examples: d.examples } : {}) });
-      link('word', d, d.english);
-      customWord.add(d.id);
-    },
-    clear: () => { unlink('word'); removeFromUnits(WORD_UNITS, 'word', (u) => u.words, (w) => customWord.has(w.id)); customWord.clear(); },
-    rows: (isCustom) => WORD_UNITS.flatMap((u) => u.words.map((w) => ({
-      id: w.id, title: w.english, sub: `photo: ${w.photo}`, emoji: w.emoji, group: `Unit ${u.number} · ${u.title}`, custom: isCustom(w.id),
-    }))),
-    ids: () => WORD_UNITS.flatMap((u) => u.words.map((w) => w.id)),
+    load: (items) => swap(WORD_UNITS, buildUnits(items, (d, id) => ({ id, english: d.english, emoji: d.emoji, photo: d.photo, ...(d.examples?.length ? { examples: d.examples } : {}) }),
+      (number, title, words) => ({ number, title, words }))),
+    rowOf: (d) => ({ id: d.id, title: d.english, sub: `photo: ${d.photo}`, emoji: d.emoji, group: unitGroup(WORD_UNITS, d.unit) }),
   },
 
   flashcards: {
@@ -228,10 +200,8 @@ export const DEFS: Record<AdminMode, Def> = {
       const title = str(raw?.title, 'Title', 60);
       return { id: idFrom('Title', title), title, emoji: emoji(raw?.emoji), photo: str(raw?.photo, 'Cover photo search words', 80), hint: text(raw?.hint, 'Hint (what the 15 words should be)', 240), words: lines(raw?.words, 'Words', 5, 15, 60) };
     },
-    add: (d) => { FLASH_TOPICS.push({ id: d.id, title: d.title, emoji: d.emoji, photo: d.photo, hint: d.hint, ...(d.words?.length ? { words: d.words } : {}) }); customFlash.add(d.id); },
-    clear: () => dropFrom(FLASH_TOPICS, customFlash),
-    rows: (isCustom) => FLASH_TOPICS.map((t) => ({ id: t.id, title: t.title, sub: t.hint, emoji: t.emoji, group: '15 cards', custom: isCustom(t.id) })),
-    ids: () => FLASH_TOPICS.map((t) => t.id),
+    load: (items) => swap(FLASH_TOPICS, items.map(({ itemId, data: d }) => ({ id: itemId, title: d.title, emoji: d.emoji, photo: d.photo, hint: d.hint, ...(d.words?.length ? { words: d.words } : {}) }))),
+    rowOf: (d) => ({ id: d.id, title: d.title, sub: d.hint, emoji: d.emoji, group: d.words?.length ? `${d.words.length} cards` : '15 cards' }),
   },
 
   dialogue: {
@@ -243,17 +213,11 @@ export const DEFS: Record<AdminMode, Def> = {
         script: script(raw?.script), course: courseId(raw?.course),
       };
     },
-    add: (d) => {
-      DIALOGUE_TOPICS.push({
-        id: d.id, title: d.title, emoji: d.emoji, photo: d.photo, partner: d.partner, partnerEmoji: d.partnerEmoji, setting: d.setting,
-        ...(d.script?.length ? { script: d.script } : {}), rev: rev(d), // rev: a changed text must not serve the old cached script
-      });
-      link('dialogue', d, d.title);
-      customDialogue.add(d.id);
-    },
-    clear: () => { unlink('dialogue'); dropFrom(DIALOGUE_TOPICS, customDialogue); },
-    rows: (isCustom) => DIALOGUE_TOPICS.map((t) => ({ id: t.id, title: t.title, sub: `${t.partner} · ${t.setting}`, emoji: t.emoji, group: t.partner, custom: isCustom(t.id) })),
-    ids: () => DIALOGUE_TOPICS.map((t) => t.id),
+    load: (items) => swap(DIALOGUE_TOPICS, items.map(({ itemId, data: d }) => ({
+      id: itemId, title: d.title, emoji: d.emoji, photo: d.photo, partner: d.partner, partnerEmoji: d.partnerEmoji, setting: d.setting,
+      ...(d.script?.length ? { script: d.script } : {}), rev: rev(d), // rev: a changed text must not serve the old cached script
+    }))),
+    rowOf: (d) => ({ id: d.id, title: d.title, sub: `${d.partner} · ${d.setting}`, emoji: d.emoji, group: d.partner }),
   },
 
   debate: {
@@ -261,10 +225,8 @@ export const DEFS: Record<AdminMode, Def> = {
       const title = str(raw?.title, 'Title', 60);
       return { id: idFrom('Title', title), title, emoji: emoji(raw?.emoji), statement: text(raw?.statement, 'Statement', 240), photo: str(raw?.photo, 'Cover photo search words', 80) };
     },
-    add: (d) => { DEBATE_TOPICS.push({ id: d.id, title: d.title, statement: d.statement, emoji: d.emoji, photo: d.photo }); customDebate.add(d.id); },
-    clear: () => dropFrom(DEBATE_TOPICS, customDebate),
-    rows: (isCustom) => DEBATE_TOPICS.map((t) => ({ id: t.id, title: t.title, sub: t.statement, emoji: t.emoji, group: 'Debate', custom: isCustom(t.id) })),
-    ids: () => DEBATE_TOPICS.map((t) => t.id),
+    load: (items) => swap(DEBATE_TOPICS, items.map(({ itemId, data: d }) => ({ id: itemId, title: d.title, statement: d.statement, emoji: d.emoji, photo: d.photo }))),
+    rowOf: (d) => ({ id: d.id, title: d.title, sub: d.statement, emoji: d.emoji, group: 'Debate' }),
   },
 
   characters: {
@@ -274,13 +236,11 @@ export const DEFS: Record<AdminMode, Def> = {
       if (!CHARACTER_KINDS.includes(kind as CharacterKind)) fail(`Kind must be one of: ${CHARACTER_KINDS.join(', ')}.`);
       return { id: idFrom('Name', name), name, emoji: emoji(raw?.emoji), hue: int(raw?.hue ?? 210, 'Colour hue', 0, 360), kind, about: text(raw?.about, 'About (persona)', 600) };
     },
-    add: (d, ctx) => {
-      CHARACTERS.push({ id: d.id, name: d.name, emoji: d.emoji, hue: d.hue, kind: d.kind, about: d.about, ...(d.file ? { portrait: ctx.imageUrl(d.file) } : {}) } as Character);
-      customCharacter.add(d.id);
-    },
-    clear: () => dropFrom(CHARACTERS, customCharacter),
-    rows: (isCustom) => CHARACTERS.map((c) => ({ id: c.id, title: c.name, sub: c.about, emoji: c.emoji, group: c.kind, custom: isCustom(c.id), image: c.portrait ?? null })),
-    ids: () => CHARACTERS.map((c) => c.id),
+    // a picture uploaded in the admin panel (`file`) becomes the portrait; without one the Wikipedia picture is used (CharacterPhotoService)
+    load: (items, ctx) => swap(CHARACTERS, items.map(({ itemId, data: d }) => ({
+      id: itemId, name: d.name, emoji: d.emoji, hue: d.hue, kind: d.kind, about: d.about, ...(d.file ? { portrait: ctx.imageUrl(d.file) } : {}),
+    }) as Character)),
+    rowOf: (d, ctx) => ({ id: d.id, title: d.name, sub: d.about, emoji: d.emoji, group: d.kind, image: d.file ? ctx.imageUrl(d.file) : null }),
   },
 
   roleplay: {
@@ -296,16 +256,11 @@ export const DEFS: Record<AdminMode, Def> = {
         partner: str(raw?.partner, 'Partner', 40), partnerEmoji: emoji(raw?.partnerEmoji), scenario: text(raw?.scenario, 'Scenario', 400), tasks,
       };
     },
-    add: (d) => {
-      ROLEPLAY_SCENARIOS.push({
-        id: d.id, title: d.title, category: d.category as RoleplayCategory, emoji: d.emoji, photo: d.photo,
-        partner: d.partner, partnerEmoji: d.partnerEmoji, scenario: d.scenario, tasks: d.tasks as [string, string, string],
-      });
-      customRoleplay.add(d.id);
-    },
-    clear: () => dropFrom(ROLEPLAY_SCENARIOS, customRoleplay),
-    rows: (isCustom) => ROLEPLAY_SCENARIOS.map((s) => ({ id: s.id, title: s.title, sub: s.scenario, emoji: s.emoji, group: s.category, custom: isCustom(s.id) })),
-    ids: () => ROLEPLAY_SCENARIOS.map((s) => s.id),
+    load: (items) => swap(ROLEPLAY_SCENARIOS, items.map(({ itemId, data: d }) => ({
+      id: itemId, title: d.title, category: d.category as RoleplayCategory, emoji: d.emoji, photo: d.photo,
+      partner: d.partner, partnerEmoji: d.partnerEmoji, scenario: d.scenario, tasks: d.tasks as [string, string, string],
+    }))),
+    rowOf: (d) => ({ id: d.id, title: d.title, sub: d.scenario, emoji: d.emoji, group: d.category }),
   },
 
   photo: {
@@ -314,17 +269,13 @@ export const DEFS: Record<AdminMode, Def> = {
       const u = resolveUnit(raw?.unit, PHOTO_UNITS.map((x) => x.number), undefined, false);
       return { ...u };
     },
-    add: (d, ctx) => {
-      const u = unitFor(PHOTO_UNITS, 'photo', d, () => ({ number: d.unit, photos: [] }));
-      u.photos.push({ id: d.id, image: ctx.imageUrl(d.file) });
-      customPhoto.add(d.id);
-    },
-    clear: () => { removeFromUnits(PHOTO_UNITS, 'photo', (u) => u.photos, (p) => customPhoto.has(p.id)); customPhoto.clear(); },
-    rows: (isCustom) => PHOTO_UNITS.flatMap((u) => u.photos.map((p) => ({
-      id: p.id, title: p.id.replace('photo-', 'Photo '), sub: p.image.startsWith('http') ? 'uploaded in the admin panel' : p.image, emoji: '🖼️',
-      group: `Unit ${u.number}`, custom: isCustom(p.id), image: p.image,
-    }))),
-    ids: () => PHOTO_UNITS.flatMap((u) => u.photos.map((p) => p.id)),
+    // built-in photos have `url` (a path in the FRONTEND's public folder); an uploaded one has `file` (in the media folder)
+    load: (items, ctx) => swap(PHOTO_UNITS, buildUnits(items.filter((i) => i.data.file || i.data.url),
+      (d, id) => ({ id, image: d.file ? ctx.imageUrl(d.file) : d.url as string }), (number, _title, photos) => ({ number, photos }))),
+    rowOf: (d, ctx) => ({
+      id: d.id, title: `Photo ${String(d.id).replace('photo-', '')}`, sub: d.file ? 'uploaded in the admin panel' : String(d.url ?? ''), emoji: '🖼️',
+      group: `Unit ${d.unit}`, image: d.file ? ctx.imageUrl(d.file) : d.url ?? null,
+    }),
   },
 };
 
@@ -336,8 +287,8 @@ export function unitsOf(mode: AdminMode): { number: number; title: string }[] | 
   return undefined;
 }
 
-/** photo-<n> where n is one more than the largest number in use (built-in or custom). */
-export function nextPhotoId(): string {
-  const used = PHOTO_UNITS.flatMap((u) => u.photos.map((p) => Number(p.id.replace('photo-', '')) || 0));
+/** photo-<n> where n is one more than the largest number among `ids`: pass the ids of every photo row, deleted ones included, because learners' progress rows still carry them. */
+export function nextPhotoId(ids: Iterable<string>): string {
+  const used = [...ids].map((id) => Number(id.replace('photo-', '')) || 0);
   return `photo-${(used.length ? Math.max(...used) : 0) + 1}`;
 }

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ImagePlus, Loader2, X } from "lucide-react";
 import { ErrorText, Modal } from "@/components/Modal";
-import { admin, COURSE_OPTIONS, fileToDataUrl, FORMS, type Field, type ModeInfo, type Overview, type Row } from "@/lib/admin";
+import { admin, COURSE_OPTIONS, fileToDataUrl, FORMS, type Counts, type Field, type ModeInfo, type Overview, type Row } from "@/lib/admin";
 
 type Values = Record<string, any>;
 type Picked = { name: string; dataUrl: string };
@@ -22,13 +22,15 @@ function Label({ f, children }: { f: Field; children: React.ReactNode }) {
   );
 }
 
-/** Adds an element, or edits one that was added from the panel when `edit` is given (its address and learners' progress stay). */
+/** Adds an element, or edits one (added or built-in) when `edit` is given (its address and learners' progress stay). */
 export function AddElementModal({ info, overview, edit, onChanged, onClose, onToast }: {
   info: ModeInfo; overview: Overview; edit?: Row; onClose: () => void; onToast: (m: string) => void;
   /** called after each saved element with the new counts, so the table behind can refresh */
-  onChanged: (u: { total: number; custom: number; units: ModeInfo["units"] }) => void;
+  onChanged: (u: Counts) => void;
 }) {
-  const fields = FORMS[info.mode];
+  // built-in elements are already on their courses' Learn paths, so "Add to a course" is only for added ones
+  const builtin = !!edit && !edit.custom;
+  const fields = FORMS[info.mode].filter((f) => !(builtin && f.key === "course"));
   const units = info.units ?? [];
   const nextUnit = (units.length ? Math.max(...units.map((u) => u.number)) : 0) + 1;
   const [values, setValues] = useState<Values>({ unit: units.length ? units[units.length - 1].number : 1, hue: 210, tasks: ["", "", ""] });
@@ -146,7 +148,9 @@ export function AddElementModal({ info, overview, edit, onChanged, onClose, onTo
     <Modal onClose={onClose} label={`${edit ? "Edit" : "Add"} ${info.label} element`} wide>
       <h2 className="pr-6 text-lg font-semibold">{edit ? `Edit “${edit.title}”` : `Add to ${info.label} mode`}</h2>
       <p className="mt-1 text-xs text-white/50">
-        {edit ? "Changes show up for every learner as soon as you save. Its web address stays the same, so learners keep their progress." : "It shows up for every learner as soon as you save."}
+        {edit
+          ? `Changes show up for every learner as soon as you save. Its web address stays the same, so learners keep their progress.${builtin ? " This is a built-in element: your changes are saved on top of it, and Reset in the table puts the original back." : ""}`
+          : "It shows up for every learner as soon as you save."}
       </p>
       {loading && <p className="mt-4 flex items-center gap-2 text-sm text-white/50"><Loader2 size={14} className="animate-spin" /> Loading…</p>}
 
