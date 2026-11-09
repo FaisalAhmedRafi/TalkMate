@@ -1,10 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Bell, ChevronDown, Eye, EyeOff, Lock, Mail, Plus, Shield, Trash2, User, type LucideIcon } from "lucide-react";
+import { Bell, Check, ChevronDown, Eye, EyeOff, Lock, Mail, Plus, Shield, Trash2, User, type LucideIcon } from "lucide-react";
+import { parsePhoneNumberFromString, type CountryCode } from "libphonenumber-js";
+import { CountryPicker } from "@/components/CountryPicker";
 import { ErrorText, Modal } from "@/components/Modal";
 import { api, type NotificationPrefs, type PrivacyPrefs, type ProfileData, type Progress } from "@/lib/api";
+import { countryByCode, mainCountry } from "@/lib/countries";
 import { passwordError } from "@/lib/password";
+import { checkPhone } from "@/lib/phone";
 import { SubPage } from "./SubPage";
 
 type Page = "menu" | "details" | "password" | "email" | "app" | "privacy";
@@ -20,6 +24,14 @@ const OFFSET_MINUTES = [
 ].sort((a, b) => a - b);
 const pad = (n: number) => String(n).padStart(2, "0");
 const TIME_ZONES = OFFSET_MINUTES.map((m) => `UTC${m < 0 ? "-" : "+"}${pad(Math.floor(Math.abs(m) / 60))}:${pad(Math.abs(m) % 60)}`);
+
+/** Splits a saved E.164 number into the calling-code country and the national digits shown in the box. */
+function splitPhone(phone: string | null, country: string | null): { dial: CountryCode | null; national: string } {
+  const own = countryByCode(country)?.code ?? null;
+  const p = phone ? parsePhoneNumberFromString(phone) : undefined;
+  if (!p) return { dial: own, national: phone ?? "" };
+  return { dial: p.country ?? mainCountry(p.countryCallingCode) ?? own, national: p.formatNational() };
+}
 
 const AVATAR_SIZE = 256; // px, the picture is cropped to a square and shrunk to this before upload
 
@@ -138,10 +150,31 @@ function DetailsPage({ profile, onBack, onSaved, onToast, onSnapshot }: {
   const [firstName, setFirstName] = useState(profile.firstName);
   const [lastName, setLastName] = useState(profile.lastName);
   const [timeZone, setTimeZone] = useState(profile.timeZone);
+  const start = splitPhone(profile.phone, profile.country);
+  const [country, setCountry] = useState<CountryCode | null>(countryByCode(profile.country)?.code ?? null);
+  const [dial, setDial] = useState<CountryCode | null>(start.dial);
+  const [phone, setPhone] = useState(start.national);
+  const [phoneTouched, setPhoneTouched] = useState(false);
+  const [triedSave, setTriedSave] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [photoBusy, setPhotoBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const phoneInput = useRef<HTMLInputElement>(null);
+  const dialPicked = useRef(!!profile.phone); // the calling code follows the country until a code is picked (or already saved)
+
+  const phoneCheck = checkPhone(phone, dial);
+  const pickCountry = (c: CountryCode) => { setCountry(c); if (!dialPicked.current) setDial(c); };
+  const pickDial = (c: CountryCode) => { dialPicked.current = true; setDial(c); phoneInput.current?.focus(); };
+  const phoneBlur = () => {
+    setPhoneTouched(true);
+    if (!phoneCheck.ok) return;
+    if (phone.trim().startsWith("+")) {
+      const code = parsePhoneNumberFromString(phoneCheck.e164)?.countryCallingCode;
+      if (code && (!dial || countryByCode(dial)?.dial !== code)) { dialPicked.current = true; setDial(mainCountry(code) ?? phoneCheck.country ?? null); }
+    }
+    setPhone(phoneCheck.national);
+  };
 
   // the picture saves on its own, it does not wait for the Save button
   const pickPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -161,16 +194,30 @@ function DetailsPage({ profile, onBack, onSaved, onToast, onSnapshot }: {
     catch (err) { onToast(err instanceof Error ? err.message : "Couldn't remove the picture"); }
     finally { setPhotoBusy(false); }
   };
-  const dirty = firstName.trim() !== profile.firstName || lastName.trim() !== profile.lastName || timeZone !== profile.timeZone;
+  const nameDirty = firstName.trim() !== profile.firstName || lastName.trim() !== profile.lastName || timeZone !== profile.timeZone;
+  const phoneChanged = phoneCheck.ok ? phoneCheck.e164 !== profile.phone : phone.trim() !== "" || !!profile.phone;
+  const contactDirty = country !== (profile.country ?? null) || phoneChanged;
+  const dirty = nameDirty || contactDirty;
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!dirty || busy) return;
+    setTriedSave(true);
+    // country and phone number are saved together and both are required, so they are only checked when one of them changed
+    if (contactDirty) {
+      if (!country) return setError("Please select your country.");
+      if (!phoneCheck.ok) { setPhoneTouched(true); phoneInput.current?.focus(); return; }
+    }
     setBusy(true); setError(null);
     try {
-      const saved = await api.account.saveProfile({ firstName: firstName.trim(), lastName: lastName.trim(), timeZone });
+      let saved = profile;
+      if (nameDirty) saved = await api.account.saveProfile({ firstName: firstName.trim(), lastName: lastName.trim(), timeZone });
+      if (contactDirty && country && phoneCheck.ok) saved = await api.account.saveContact({ country, phone: phoneCheck.e164 });
       onSaved(saved);
       setFirstName(saved.firstName); setLastName(saved.lastName);
+      const again = splitPhone(saved.phone, saved.country);
+      setCountry(countryByCode(saved.country)?.code ?? null); setDial(again.dial); setPhone(again.national);
+      dialPicked.current = !!saved.phone; setPhoneTouched(false); setTriedSave(false);
       api.progress.get().then(onSnapshot).catch(() => {}); // the name in the top-right corner
       onToast("Saved");
     } catch (err) { setError(err instanceof Error ? err.message : "Couldn't save"); }
@@ -223,6 +270,22 @@ function DetailsPage({ profile, onBack, onSaved, onToast, onSnapshot }: {
             </select>
             <ChevronDown size={18} className="pointer-events-none absolute right-5 top-1/2 -translate-y-1/2" />
           </div>
+        </div>
+        <div>
+          <label className={label}>Country</label>
+          <CountryPicker variant="country" ariaLabel="Country" placeholder="Select country" value={country} onChange={(c) => { pickCountry(c); setError(null); }} invalid={triedSave && !country} />
+        </div>
+        <div>
+          <label htmlFor="phone" className={label}>Phone number</label>
+          <div className={`flex min-w-0 items-stretch rounded-2xl border bg-[#1f1f27] transition-colors focus-within:border-white/30 ${phoneTouched && !phoneCheck.ok ? "border-red-400/60" : "border-white/10"}`}>
+            <CountryPicker variant="dial" ariaLabel="Phone country code" value={dial} onChange={pickDial} returnFocus={false} className="flex shrink-0 border-r border-white/10" />
+            <input id="phone" ref={phoneInput} type="tel" inputMode="tel" autoComplete="tel-national" placeholder="Phone number" maxLength={20} value={phone}
+              aria-invalid={phoneTouched && !phoneCheck.ok}
+              onChange={(e) => setPhone(e.target.value.replace(/[^\d+\s().-]/g, ""))} onBlur={phoneBlur}
+              className="min-w-0 flex-1 bg-transparent py-4 pl-4 pr-2 text-sm font-semibold outline-none placeholder:text-white/50" />
+            {phoneCheck.ok && <Check size={18} aria-label="Valid phone number" className="my-auto mr-4 shrink-0 text-emerald-400" />}
+          </div>
+          {phoneTouched && !phoneCheck.ok && <p role="alert" className="mt-2 px-1 text-xs text-red-300">{phoneCheck.message}</p>}
         </div>
         <ErrorText text={error} />
         <button type="submit" disabled={!dirty || busy} className={saveBtn(dirty && !busy)}>{busy ? "Saving…" : "Save"}</button>
