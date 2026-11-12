@@ -15,8 +15,32 @@ git push / PR ──► GitHub Actions CI ──(green, merge to main)──► 
 - **Dependabot** (`.github/dependabot.yml`) opens weekly update PRs for both apps
   and the Actions; they go through CI too.
 
-Any host that runs Node.js ≥ 20.9 works; this is the setup the code expects
-(`PUBLIC_API_URL`, `RAILWAY_VOLUME_MOUNT_PATH`, `FRONTEND_URL`).
+Any host that runs Node.js ≥ 20.9 works. Two setups are documented: Vercel + Railway
+(sections 1–3) and everything on Hostinger (section 4).
+
+## 4. Hostinger (both apps + MySQL on one account)
+
+Live since 2026-11-12: **https://talkmate.edsol.academy** (web) and
+**https://talkmate-api.edsol.academy** (API), account `u138423697`, recorded in
+`.hostinger/sites.json`. Each app is its own Node.js *website* (not a subdomain
+folder of another site), and the database lives on the same server.
+
+| | Web (`frontend/`) | API (`backend/`) |
+|---|---|---|
+| App type | Next.js | NestJS, entry file `main.js`, output `dist` |
+| Node | 22 | 22 |
+| Build | `npm run build` = `next build --webpack` (Turbopack's PostCSS worker cannot start on shared hosting) | `npm run build`; its `prebuild` generates the Prisma client and, with `MIGRATE_ON_BUILD=1`, runs `prisma migrate deploy` (Hostinger only runs `npm install` + `npm run build`, no start hook) |
+| Env vars | `NEXT_PUBLIC_API_URL=https://talkmate-api.edsol.academy` (+ `NEXT_PUBLIC_GOOGLE_CLIENT_ID`); a change needs a rebuild | `DATABASE_URL` (host **`127.0.0.1`**, never `localhost` or `srvNNNN.hstgr.io`), `JWT_SECRET`, `MIGRATE_ON_BUILD=1`, `FRONTEND_URL`, `PUBLIC_API_URL`, `MEDIA_DIR=/home/<user>/talkmate-media` (outside the deploy folder so pictures survive redeploys), plus the AI / mail / Google / photo keys |
+
+**Do not set `NODE_ENV=production` on the API**: Hostinger then installs only
+`dependencies` and the build loses the Nest CLI and Prisma. HSTS is sent anyway
+because `PUBLIC_API_URL` is `https://`.
+
+Deploys are uploaded archives (`git archive --format=zip -o app.zip HEAD:backend`,
+same for `frontend`) built with the Hostinger API; the repository is not reachable
+from this Hostinger account's Git installation, so there is no auto-deploy yet.
+
+The Vercel + Railway setup is described below.
 
 ## 1. Database (MySQL 8.0.13+)
 

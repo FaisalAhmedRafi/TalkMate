@@ -6,6 +6,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning: [S
 ## [Unreleased]
 
 ### Added
+- Hosted on Hostinger: https://talkmate.edsol.academy (web) and https://talkmate-api.edsol.academy (API), each its own Node.js website, with a local MySQL database; `.hostinger/sites.json` records the targets and `docs/guides/deployment.md` §4 the settings.
+- Backend `prebuild` (`scripts/prebuild.js`): generates the Prisma client and, with `MIGRATE_ON_BUILD=1`, applies migrations (Hostinger only runs `npm run build`).
 - `AGENTS.md`: rules for contributors and AI agents (document every change, security first, CI green, no secrets in git, definition of done). `CLAUDE.md` points to it.
 - `docs/security.md`: NIST CSF 2.0 profile (Govern / Identify / Protect / Detect / Respond / Recover), data classification, data that leaves the system, local vs production credentials, checklist for every change.
 - `docs/guides/deployment.md`: Vercel + Railway + MySQL setup, environment variables, release steps and a go-live security checklist.
@@ -23,6 +25,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning: [S
 - **Security upgrades** (all high/critical `npm audit` findings fixed, 0 left in production dependencies):
   - Frontend: Next.js 14.2 → 16.4, React 18 → 19 (Next 14 has no patched release for the current advisories). Three `RefObject` prop types adjusted for React 19; `tsconfig.json` updated by Next.
   - Backend: NestJS 10 → 11 (Express 5), `@nestjs/config` 3 → 4, `@nestjs/jwt` 10 → 11, `@nestjs/throttler` 6.5, nodemailer 6 → 10.
+- Frontend production build uses webpack (`next build --webpack`): Turbopack's PostCSS worker cannot start on Hostinger shared hosting.
+- API sends HSTS when `PUBLIC_API_URL` is `https://` (not only with `NODE_ENV=production`, which Hostinger cannot set without dropping the build tools).
 - `frontend/next.config.mjs` pins `turbopack.root` (the repo has no root `package.json`).
 
 ### Removed
