@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, FileJson, Loader2, Pencil, Plus, RotateCcw, Search, Trash2, Undo2, X } from "lucide-react";
+import { ArrowLeft, BarChart3, FileJson, LayoutList, Loader2, Pencil, Plus, RotateCcw, Search, Trash2, Undo2, X } from "lucide-react";
 import { admin, type AdminMode, type Counts, type ImportResult, type Overview, type Row } from "@/lib/admin";
 import { AddElementModal } from "./AddElementModal";
+import { AnalyticsView } from "./AnalyticsView";
 import { AdminSelect } from "./AdminSelect";
 import { ImportModal } from "./ImportModal";
 
@@ -68,6 +69,7 @@ function PhotoLightbox({ src, title, onClose }: { src: string; title: string; on
 
 export function AdminPanel() {
   const [overview, setOverview] = useState<Overview | null>(null);
+  const [view, setView] = useState<"content" | "analytics">("analytics");
   const [mode, setMode] = useState<AdminMode>("sentence");
   const [rows, setRows] = useState<Row[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -168,8 +170,17 @@ export function AdminPanel() {
         <header className="flex items-center gap-3">
           <Link href="/dashboard?tab=home" className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm text-white/60 hover:bg-white/5 hover:text-white"><ArrowLeft size={16} /> Back to app</Link>
           <h1 className="ml-1 text-lg font-semibold">Admin panel</h1>
-          <span className="rounded-full bg-violet-600/20 px-2 py-0.5 text-[11px] font-medium text-violet-200">Learning content</span>
+          <div className="ml-2 flex rounded-lg bg-white/[0.06] p-0.5 text-sm">
+            {([["analytics", "Analytics", BarChart3], ["content", "Learning content", LayoutList]] as const).map(([id, label, Icon]) => (
+              <button key={id} onClick={() => setView(id)} aria-pressed={view === id}
+                className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 ${view === id ? "bg-violet-600 text-white" : "text-white/60 hover:text-white"}`}><Icon size={14} />{label}</button>
+            ))}
+          </div>
         </header>
+
+        {view === "analytics" && <AnalyticsView />}
+
+        {view === "content" && (<>
 
         {/* mode tabs with counts */}
         <nav aria-label="Learning modes" className="mt-5 flex gap-2 overflow-x-auto pb-1">
@@ -265,6 +276,7 @@ export function AdminPanel() {
             </>
           )}
         </div>
+        </>)}
       </div>
 
       {adding && info && overview && <AddElementModal info={info} overview={overview} onClose={() => { setAdding(false); load(mode); }} onChanged={patchInfo} onToast={setToast} />}

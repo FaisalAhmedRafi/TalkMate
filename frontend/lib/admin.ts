@@ -20,6 +20,22 @@ export type ImportResult = {
   results: { index: number; ok: boolean; id?: string; error?: string }[];
 };
 
+
+export type AnalyticsData = {
+  generatedAt: string; today: string;
+  totals: {
+    users: number; signupsToday: number; signupsYesterday: number; signups7: number; signups30: number; avgPerDay30: number;
+    activeToday: number; active7: number; practiceMinutesToday: number; premium: number; activeSubscriptions: number; referred: number;
+    verified: number; verifiedPct: number; google: number; googlePct: number; noCountry: number; countriesCount: number;
+  };
+  series: { date: string; count: number }[];
+  /** code "??" = no country saved (Google sign-ups and accounts made before the country field) */
+  countries: { code: string; total: number; today: number; last7: number; last30: number }[];
+  languages: { label: string; count: number }[];
+  levels: { label: string; count: number }[];
+  recent: { id: string; name: string; email: string; country: string | null; createdAt: string; method: "Google" | "Email"; verified: boolean }[];
+};
+
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
   const token = getToken();
   let res: Response;
@@ -41,6 +57,8 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
 }
 
 export const admin = {
+  /** Sign-ups and activity. The browser's UTC offset makes "today" the admin's own day. */
+  analytics: () => call<AnalyticsData>("GET", `/admin/analytics?offset=${-new Date().getTimezoneOffset()}`),
   me: () => call<{ admin: boolean; configured: boolean }>("GET", "/admin/me"),
   overview: () => call<Overview>("GET", "/admin/overview"),
   items: (mode: AdminMode) => call<{ mode: AdminMode; rows: Row[] }>("GET", `/admin/items?mode=${mode}`),

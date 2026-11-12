@@ -4,11 +4,12 @@ import { Throttle } from '@nestjs/throttler';
 import { AuthGuard } from '../auth/auth.guard';
 import { AdminGuard, adminEmails, isAdminEmail } from './admin.guard';
 import { AdminService } from './admin.service';
+import { AnalyticsService } from './analytics.service';
 
 @Throttle({ default: { limit: 120, ttl: 60_000 } })
 @Controller('admin')
 export class AdminController {
-  constructor(private readonly admin: AdminService, private readonly cfg: ConfigService) {}
+  constructor(private readonly admin: AdminService, private readonly analytics: AnalyticsService, private readonly cfg: ConfigService) {}
 
   /** Any logged-in user may ask whether they are an admin (the Account menu uses it to show the link). */
   @UseGuards(AuthGuard)
@@ -16,6 +17,11 @@ export class AdminController {
   me(@Req() req: any) {
     return { admin: isAdminEmail(this.cfg, req.user.email), configured: adminEmails(this.cfg).length > 0 };
   }
+
+  /** Analytics tab: sign-ups today / this week, countries, activity, plans. `offset` = the browser's minutes ahead of UTC (Dhaka: 360), so "today" is the admin's own day */
+  @UseGuards(AdminGuard)
+  @Get('analytics')
+  analyticsOverview(@Query('offset') offset?: string) { return this.analytics.overview(offset); }
 
   /** Counts per mode (+ the units to pick from in the forms) */
   @UseGuards(AdminGuard)
