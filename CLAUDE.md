@@ -1,10 +1,14 @@
 # CLAUDE.md
 
+> **Read [`AGENTS.md`](AGENTS.md) first**: it holds the non-negotiable rules (document every change in `CHANGELOG.md` / `TODO.md`, security first per [`docs/security.md`](docs/security.md) (NIST CSF 2.0), CI green, no secrets in git) and the definition of done. This file is the detailed code reference.
+
 Guidance for working in this repository.
+
+**Security, CI and framework upgrade (2026-11-12):** Next.js 16 + React 19 and NestJS 11 (Express 5) + nodemailer 10; security headers on both apps; GitHub Actions CI; `.env` templates; the 28 leftover PostgreSQL migration folders were deleted (see CHANGELOG).
 
 **Last audited against the code: 2026-11-08.** The repository map, Prisma schema and migrations, every controller and DTO, the dashboard, Account, Chat, Call and Debate code were re-checked on that date. The internals of Sentence, Word, Flashcards, Characters, Roleplay, Dialogue and Photo were not re-read line by line; their sections below still describe the earlier version, which the routes, models and catalogs confirm. When you change code, update the matching section here in the same change. **Admin: Analytics tab with sign-ups today, countries and activity (added 2026-11-09, see "Admin (`src/admin`)" and "Admin panel (`app/admin`)").** **Admin: custom select box and Photo-mode zoom pop-up (added 2026-11-09, see "Admin panel (`app/admin`)").** **Sign-up now asks for Country and Phone Number, both mandatory (added 2026-11-09, see gotcha 67 and "Auth").** **Added after that audit (2026-11-08): the Admin panel** (since extended with editing, optional own text, course paths, character portraits and **editing/deleting built-in elements**) (`/admin`, `src/admin`) and **the move of ALL content of the eight modes into the database** (`src/content`, table `ContentItem`; **no content is left in the code**, the catalog files hold only types, lookups and live arrays); their sections are current.
 
-**Database engine: MySQL (switched 2026-11-12).** The 28 PostgreSQL migrations were replaced by one MySQL baseline plus the converted content seed; the old list below is history only. MySQL notes: `Json` columns use expression defaults (`dbgenerated("(JSON_ARRAY())")` / `(JSON_OBJECT())`, needs MySQL 8.0.13+); `String` is `VARCHAR(191)`, so long text uses `@db.Text` / `@db.LongText` (`User.avatar`, `PracticeEntry.text`, `SupportMessage.message`); text comparisons are case-insensitive; `prisma migrate deploy` works without extra rights but `migrate dev` needs a shadow-database privilege. `scripts/copy-postgres-to-mysql.js` is the one-off data copy from the old Postgres database.
+**Database engine: MySQL (switched 2026-11-12).** The 28 PostgreSQL migrations were replaced by one MySQL baseline plus the converted content seed (the old folders are deleted from the repo); the old list below is history only. MySQL notes: `Json` columns use expression defaults (`dbgenerated("(JSON_ARRAY())")` / `(JSON_OBJECT())`, needs MySQL 8.0.13+); `String` is `VARCHAR(191)`, so long text uses `@db.Text` / `@db.LongText` (`User.avatar`, `PracticeEntry.text`, `SupportMessage.message`); text comparisons are case-insensitive; `prisma migrate deploy` works without extra rights but `migrate dev` needs a shadow-database privilege. `scripts/copy-postgres-to-mysql.js` is the one-off data copy from the old Postgres database.
 
 ## What this is
 
@@ -34,8 +38,8 @@ Monorepo with two independent apps, **no root `package.json`**. Run every npm co
 
 | Path | What | Version (from lockfiles) | Port |
 |---|---|---|---|
-| `backend/` | NestJS API, Prisma + MySQL 8, JWT, OpenRouter | Nest 10.4.x, Prisma 5.22 | 4000 |
-| `frontend/` | Next.js App Router, React 18, Tailwind 3, lucide-react | Next 14.2.x | 3000 |
+| `backend/` | NestJS API, Prisma + MySQL 8, JWT, OpenRouter | Nest 11.2.x (Express 5), Prisma 5.22 | 4000 |
+| `frontend/` | Next.js App Router, React 19, Tailwind 3, lucide-react | Next 16.4.x | 3000 |
 | `docker-compose.yml` | Local MySQL 8, user/password/db all `talkpal` (root password `talkpal`), port 3306, volume `mysqldata` | | 3306 |
 
 Naming leftovers: npm packages are `talkpal-backend` / `talkpal-frontend`, DB credentials are `talkpal`, but the product, UI, `X-Title` header and localStorage key use "TalkMate". Do not rename these unless asked, since the DB credentials are baked into local volumes.
@@ -59,11 +63,11 @@ npm install
 npm run dev | build | start
 ```
 
-No tests, linter, formatter or CI exist. `frontend` code has `eslint-disable` comments but ESLint is not installed. The only verification available is `npm run build` in each app plus manual testing. Say so rather than claiming tests pass.
+No tests, linter or formatter exist. `frontend` code has `eslint-disable` comments but ESLint is not installed. Verification is `npm run typecheck` and `npm run build` in each app, manual testing, and CI (`.github/workflows/ci.yml`: gitleaks, `npm audit --audit-level=high`, type-check, build, `prisma migrate deploy` on MySQL 8 and curl smoke tests for both apps). Say so rather than claiming tests pass.
 
 ## Environment variables
 
-Backend `.env` (git-ignored). The README says `cp .env.example .env`, but **there is no `.env.example` in the repo**. Create `.env` by hand:
+Backend `.env` (git-ignored; template `backend/.env.example`, `cp .env.example .env`):
 
 | Var | Required | Notes |
 |---|---|---|
@@ -88,7 +92,7 @@ Backend `.env` (git-ignored). The README says `cp .env.example .env`, but **ther
 
 **OpenRouter free quota**: models ending in `:free` allow 20 requests/minute, and 50 requests/day unless the account has ever bought 10 credits (then 1,000/day). The limit is per account, so pinning another free model does not raise it. Every sentence set, pronunciation check, chat turn and feedback is one request. The backend logs OpenRouter's reason for each failure (`<model> -> 429 <reason>`).
 
-Frontend `.env.local` (git-ignored; there is **no `.env.local.example` in the repo either**, so create it by hand): `NEXT_PUBLIC_API_URL=http://localhost:4000`, `NEXT_PUBLIC_CHARACTER_PORTRAITS=1` (optional, see Characters Mode), and `NEXT_PUBLIC_GOOGLE_CLIENT_ID` (same value as the backend `GOOGLE_CLIENT_ID`; without it the login page shows a hint instead of the Google button).
+Frontend `.env.local` (git-ignored; template `frontend/.env.local.example`): `NEXT_PUBLIC_API_URL=http://localhost:4000`, `NEXT_PUBLIC_CHARACTER_PORTRAITS=1` (optional, see Characters Mode), and `NEXT_PUBLIC_GOOGLE_CLIENT_ID` (same value as the backend `GOOGLE_CLIENT_ID`; without it the login page shows a hint instead of the Google button).
 
 **Deployment** (as the code expects it): frontend on Vercel (`NEXT_PUBLIC_API_URL` must point at the API), API on Railway and MySQL on Hostinger (or any MySQL 8 host) (`FRONTEND_URL` = the Vercel origin, `PUBLIC_API_URL` = the Railway URL, optionally a volume for photos). `npm run prisma:deploy` applies migrations in production.
 
@@ -189,7 +193,8 @@ Migrations (never rename or edit an applied one; some folders have no name suffi
 
 ### Bootstrap (`main.ts`)
 - `bodyParser: false`, then `json({ limit: '6mb' })`. Needed for base64 photos (the DTO allows up to 5,000,000 chars).
-- `trust proxy` = 1 (so throttling sees the real client IP behind one proxy).
+- `trust proxy` = 1 (so throttling sees the real client IP behind one proxy). `x-powered-by` is disabled.
+- Security headers middleware on every response (`default-src 'none'` CSP, `nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `Cross-Origin-Resource-Policy: cross-origin` so the web app can show `/media` pictures, HSTS only when `NODE_ENV=production`). A warning is logged when `JWT_SECRET` is shorter than 32 characters.
 - CORS allows only the origins in `FRONTEND_URL`.
 - CORS is enabled **before** the static files, so `/media/*` pictures also carry the CORS header (Photo Mode shrinks a photo on a canvas, which needs it for pictures uploaded in the Admin panel; see gotcha 62).
 - Static files: `app.useStaticAssets(MEDIA_DIR, { prefix: '/media/', maxAge: '7d' })` (`MEDIA_DIR` imported from `word/word.images.ts`). It must serve the same folder the photo services write to (see gotcha 54).
@@ -620,6 +625,8 @@ Frontend only: no endpoint, no migration. A dashboard tab (`active === "explore"
 ### Styling and TypeScript
 Tailwind utility classes only (`globals.css` is just the three directives). Dark theme, with two palettes. The **dashboard** shell uses page `bg-[#0D0E17]`, cards `bg-[#171827]`, a `bg-[#11121D]` bottom bar and violet accents. The **mode pages and Account sub-pages** use page `bg-[#16161c]` (full-screen chats `bg-[#222228]`), cards `bg-[#1f1f27]` and indigo-600 primary, with `white/10` surfaces. Keep new UI consistent with the area it lives in. `tsconfig` is `strict`; path alias `@/*` = frontend root. Client components start with `"use client"`. Frontend uses double quotes and 2-space indent; backend uses single quotes.
 
+**Security headers and CSP** live in `frontend/next.config.mjs` (`headers()`): a new third-party host (script, image, API, frame) must be added to the CSP there or the browser blocks it. `NEXT_PUBLIC_API_URL` is read at build time and added to `img-src` / `connect-src`. Google sign-in is allowed under `accounts.google.com`; images may come from any `https:` host. `Permissions-Policy` allows the microphone for the app itself only (speech recognition). React 19: refs passed as props are typed `RefObject<T | null>`.
+
 ## Recipes
 
 **Add a chat-style mode** (conversation with a reviewing side panel): copy a sibling module rather than touching `/ai/chat`. Backend: a new `src/<mode>/` with catalog (if it has a grid), prompts, dto, service, controller and module, registered in `app.module.ts`; add a Prisma model for saved chats (and a migration); use `ProgressService.practice()` in `reply` for the +10 XP. Frontend: add the id to `ModeId` and `MODES` in `lib/modes.ts` and to the `router.push` list in `clickMode`; add `app/<mode>/` pages, a `<Mode>Provider`, and an `api.<mode>` namespace in `lib/api.ts`. Debate (grid + sides) and Roleplays (grid + scenarios) are the closest templates; Chat and Call are the templates for one-conversation-plus-history modes.
@@ -663,7 +670,7 @@ Tailwind utility classes only (`globals.css` is just the three directives). Dark
 3. **Streak depends on timer seconds, not messages.** Sending messages gives XP but never extends the streak; 180 s of visible-tab time inside an open mode does.
 4. **XP farming**: every Regenerate and every message gives +10 XP with no limit other than the 20 req/min throttle.
 5. **`addTime` is not atomic** (read, upsert, update in separate calls); concurrent requests could double or skip a streak step.
-6. **README is stale**: it lists three tables (there are 19), says `cp .env.example .env` (no such file exists, nor `.env.local.example`), suggests `migrate dev --name init` although 23 migrations exist, still says `/ai/chat` serves Chat, Call and Characters, and omits most routes (`/chat`, `/call`, `/debate`, `/account`, `/sentence`, `/word`, ...). This file is the reliable source.
+6. **README is an overview** (rewritten 2026-11-12, checked against the code); this file stays the detailed reference for routes, payloads and limits.
 7. **Native language** is stored in `Progress.nativeLanguage` (default English), set with "Choose translation language" in Account > Settings (also in the Chat and Call Settings dialogs), and sent with every AI call. Translations, tips and feedback are written in it. Nothing stops it being the same as the target language.
 8. **Language default mismatch**: DB default is Spanish, `ai.service.ts` fallback is Bengali (the frontend always sends the language, so this rarely shows).
 9. **Duplicated types/constants** between `ai/dto.ts` and `lib/api.ts` (modes, generate types) and between backend and frontend for XP/streak constants. There is no shared package.
