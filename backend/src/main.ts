@@ -15,13 +15,15 @@ async function bootstrap() {
   app.disable('x-powered-by');
   // Security headers (NIST CSF 2.0 PR.PS, see docs/security.md). The API only serves JSON and /media pictures,
   // so nothing may run or be framed; pictures stay cross-origin readable because the frontend lives elsewhere.
+  // HSTS when served over HTTPS (Hostinger installs only dependencies when NODE_ENV=production, so it is not set there)
+  const hsts = process.env.NODE_ENV === 'production' || (process.env.PUBLIC_API_URL ?? '').startsWith('https://');
   app.use((_req: Request, res: Response, next: NextFunction) => {
     res.setHeader('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'; base-uri 'none'");
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('Referrer-Policy', 'no-referrer');
     res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-    if (process.env.NODE_ENV === 'production') res.setHeader('Strict-Transport-Security', 'max-age=63072000; includeSubDomains');
+    if (hsts) res.setHeader('Strict-Transport-Security', 'max-age=63072000; includeSubDomains');
     next();
   });
   app.use(json({ limit: '6mb' }));
