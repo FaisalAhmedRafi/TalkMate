@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "mysql"
   url      = env("DATABASE_URL")
 }
 
@@ -14,7 +14,7 @@ model User {
   lastName     String?
   country      String? // ISO 3166-1 alpha-2 code chosen at sign-up, e.g. "BD" (null for older and Google-only accounts)
   phone        String? // phone number in international E.164 form, e.g. "+8801712345678" (null for older and Google-only accounts)
-  avatar       String? // small square profile picture as a data URL (resized in the browser)
+  avatar       String? @db.LongText // small square profile picture as a data URL (resized in the browser)
   timeZone     String             @default("UTC+00:00")
   passwordHash String? // null for accounts created with Google and never given a password
   googleId     String?            @unique // Google account id (the `sub` claim)
@@ -93,7 +93,7 @@ model PracticeEntry {
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   day       String // UTC date, YYYY-MM-DD
-  text      String
+  text      String   @db.Text
   createdAt DateTime @default(now())
 
   @@index([userId, day])
@@ -140,9 +140,9 @@ model DebateSession {
   topicId      String // matches an id in src/debate/debate.catalog.ts
   side         String // the learner's side: "for" | "against"
   language     String // the language being learned, so each language has its own debate
-  messages     Json     @default("[]") // [{ role, content }], starting with the teacher's opening
-  reviews      Json     @default("{}") // { "<message index>": { correct, corrected, explanation, translation } }
-  translations Json     @default("{}") // { "<message index>": "text in the learner's native language" }
+  messages     Json     @default(dbgenerated("(JSON_ARRAY())")) // [{ role, content }], starting with the teacher's opening
+  reviews      Json     @default(dbgenerated("(JSON_OBJECT())")) // { "<message index>": { correct, corrected, explanation, translation } }
+  translations Json     @default(dbgenerated("(JSON_OBJECT())")) // { "<message index>": "text in the learner's native language" }
   count        Int      @default(0) // messages the learner has sent
   updatedAt    DateTime @updatedAt
 
@@ -154,9 +154,9 @@ model CharacterSession {
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   characterId  String // matches an id in src/characters/characters.catalog.ts
   language     String // the language being learned, so each language has its own conversation
-  messages     Json     @default("[]") // [{ role, content }], starting with the character's opening
-  reviews      Json     @default("{}") // { "<message index>": { correct, corrected, explanation, translation } }
-  translations Json     @default("{}") // { "<message index>": "text in the learner's native language" }
+  messages     Json     @default(dbgenerated("(JSON_ARRAY())")) // [{ role, content }], starting with the character's opening
+  reviews      Json     @default(dbgenerated("(JSON_OBJECT())")) // { "<message index>": { correct, corrected, explanation, translation } }
+  translations Json     @default(dbgenerated("(JSON_OBJECT())")) // { "<message index>": "text in the learner's native language" }
   count        Int      @default(0) // messages the learner has sent
   updatedAt    DateTime @updatedAt
 
@@ -191,7 +191,7 @@ model WordProgress {
   language  String // the language being learned: the same word is a separate lesson in each language
   lesson    Json? // the generated lesson (word, translation, sentences), kept so "Continue" shows the same content
   step      Int      @default(0) // 0 = word card, 1..N = the sentence being practised
-  scores    Json     @default("[]") // per sentence: 1-5, or null when skipped or not reached
+  scores    Json     @default(dbgenerated("(JSON_ARRAY())")) // per sentence: 1-5, or null when skipped or not reached
   finished  Boolean  @default(false) // the current run is done
   passed    Boolean  @default(false) // ever passed (an average of 3 or more)
   bestScore Float    @default(0)
@@ -209,8 +209,8 @@ model FlashcardDeck {
   topicId   String // matches an id in src/flashcard/flashcard.catalog.ts
   language  String // the language being learned
   cards     Json // [{ term, translation, example, exampleTranslation, photo, image }]
-  status    Json     @default("[]") // per card: "new" | "learning" | "known"
-  flagged   Json     @default("[]") // per card: true when flagged for the Daily review
+  status    Json     @default(dbgenerated("(JSON_ARRAY())")) // per card: "new" | "learning" | "known"
+  flagged   Json     @default(dbgenerated("(JSON_ARRAY())")) // per card: true when flagged for the Daily review
   updatedAt DateTime @updatedAt
 
   @@id([userId, topicId, language])
@@ -221,9 +221,9 @@ model RoleplaySession {
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   scenarioId   String // matches an id in src/roleplay/roleplay.catalog.ts
   language     String // the language being learned, so each language has its own chat
-  messages     Json     @default("[]") // [{ role, content }], starting with the partner's opening line
-  reviews      Json     @default("{}") // { "<message index>": { correct, corrected, explanation, translation } }
-  translations Json     @default("{}") // { "<message index>": "text in the learner's native language" }
+  messages     Json     @default(dbgenerated("(JSON_ARRAY())")) // [{ role, content }], starting with the partner's opening line
+  reviews      Json     @default(dbgenerated("(JSON_OBJECT())")) // { "<message index>": { correct, corrected, explanation, translation } }
+  translations Json     @default(dbgenerated("(JSON_OBJECT())")) // { "<message index>": "text in the learner's native language" }
   count        Int      @default(0) // messages the learner has sent
   updatedAt    DateTime @updatedAt
 
@@ -238,9 +238,9 @@ model ChatSession {
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   language     String // the language being learned, so each language has its own chats
   tutor        String   @default("Emma") // Emma, Kai, Nina or Niko
-  messages     Json     @default("[]") // [{ role, content }], starting with the tutor's greeting
-  reviews      Json     @default("{}") // { "<message index>": { correct, corrected, explanation, translation } }
-  translations Json     @default("{}") // { "<message index>": "text in the learner's native language" }
+  messages     Json     @default(dbgenerated("(JSON_ARRAY())")) // [{ role, content }], starting with the tutor's greeting
+  reviews      Json     @default(dbgenerated("(JSON_OBJECT())")) // { "<message index>": { correct, corrected, explanation, translation } }
+  translations Json     @default(dbgenerated("(JSON_OBJECT())")) // { "<message index>": "text in the learner's native language" }
   count        Int      @default(0) // messages the learner has sent
   archived     Boolean  @default(false)
   createdAt    DateTime @default(now())
@@ -257,9 +257,9 @@ model CallSession {
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   language     String // the language being learned, so each language has its own calls
   tutor        String   @default("Kai") // Emma, Kai, Nina or Niko
-  messages     Json     @default("[]") // [{ role, content }], starting with the tutor's greeting
-  reviews      Json     @default("{}") // { "<message index>": { correct, corrected, explanation } }
-  translations Json     @default("{}") // { "<message index>": "text in the learner's native language" }
+  messages     Json     @default(dbgenerated("(JSON_ARRAY())")) // [{ role, content }], starting with the tutor's greeting
+  reviews      Json     @default(dbgenerated("(JSON_OBJECT())")) // { "<message index>": { correct, corrected, explanation } }
+  translations Json     @default(dbgenerated("(JSON_OBJECT())")) // { "<message index>": "text in the learner's native language" }
   count        Int      @default(0) // things the learner has said
   seconds      Int      @default(0) // how long the call lasted
   archived     Boolean  @default(false)
@@ -291,7 +291,7 @@ model SupportMessage {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   email     String // the user's account email when they wrote, so replies still work after an email change
   type      String // one of SUPPORT_TYPES in account.options.ts
-  message   String
+  message   String   @db.Text
   createdAt DateTime @default(now())
 
   @@index([createdAt])

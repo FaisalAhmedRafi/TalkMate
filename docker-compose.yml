@@ -1,12 +1,14 @@
 services:
   db:
-    image: postgres:16
+    image: mysql:8.0
     restart: unless-stopped
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
     environment:
-      POSTGRES_USER: talkpal
-      POSTGRES_PASSWORD: talkpal
-      POSTGRES_DB: talkpal
-    ports: ["5432:5432"]
-    volumes: [pgdata:/var/lib/postgresql/data]
+      MYSQL_ROOT_PASSWORD: talkpal
+      MYSQL_DATABASE: talkpal
+      MYSQL_USER: talkpal
+      MYSQL_PASSWORD: talkpal
+    ports: ["3306:3306"]
+    volumes: [mysqldata:/var/lib/mysql]
 volumes:
-  pgdata:
+  mysqldata:

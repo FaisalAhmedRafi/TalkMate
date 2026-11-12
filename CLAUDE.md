@@ -4,6 +4,8 @@ Guidance for working in this repository.
 
 **Last audited against the code: 2026-11-08.** The repository map, Prisma schema and migrations, every controller and DTO, the dashboard, Account, Chat, Call and Debate code were re-checked on that date. The internals of Sentence, Word, Flashcards, Characters, Roleplay, Dialogue and Photo were not re-read line by line; their sections below still describe the earlier version, which the routes, models and catalogs confirm. When you change code, update the matching section here in the same change. **Admin: Analytics tab with sign-ups today, countries and activity (added 2026-11-09, see "Admin (`src/admin`)" and "Admin panel (`app/admin`)").** **Admin: custom select box and Photo-mode zoom pop-up (added 2026-11-09, see "Admin panel (`app/admin`)").** **Sign-up now asks for Country and Phone Number, both mandatory (added 2026-11-09, see gotcha 67 and "Auth").** **Added after that audit (2026-11-08): the Admin panel** (since extended with editing, optional own text, course paths, character portraits and **editing/deleting built-in elements**) (`/admin`, `src/admin`) and **the move of ALL content of the eight modes into the database** (`src/content`, table `ContentItem`; **no content is left in the code**, the catalog files hold only types, lookups and live arrays); their sections are current.
 
+**Database engine: MySQL (switched 2026-11-12).** The 28 PostgreSQL migrations were replaced by one MySQL baseline plus the converted content seed; the old list below is history only. MySQL notes: `Json` columns use expression defaults (`dbgenerated("(JSON_ARRAY())")` / `(JSON_OBJECT())`, needs MySQL 8.0.13+); `String` is `VARCHAR(191)`, so long text uses `@db.Text` / `@db.LongText` (`User.avatar`, `PracticeEntry.text`, `SupportMessage.message`); text comparisons are case-insensitive; `prisma migrate deploy` works without extra rights but `migrate dev` needs a shadow-database privilege. `scripts/copy-postgres-to-mysql.js` is the one-off data copy from the old Postgres database.
+
 ## What this is
 
 TalkMate is an AI language-practice web app (a Talkpal-style clone; the UI even says "in this clone"). A learner picks a target language and level, then practices in ten "modes": Chat, Call (voice), Sentence, Word, Dialogue, Roleplays, Characters, Debates, Photo and Flashcards. Practice earns XP, levels, streaks and achievements, and an LLM writes daily feedback.
@@ -32,16 +34,16 @@ Monorepo with two independent apps, **no root `package.json`**. Run every npm co
 
 | Path | What | Version (from lockfiles) | Port |
 |---|---|---|---|
-| `backend/` | NestJS API, Prisma + PostgreSQL, JWT, OpenRouter | Nest 10.4.x, Prisma 5.22 | 4000 |
+| `backend/` | NestJS API, Prisma + MySQL 8, JWT, OpenRouter | Nest 10.4.x, Prisma 5.22 | 4000 |
 | `frontend/` | Next.js App Router, React 18, Tailwind 3, lucide-react | Next 14.2.x | 3000 |
-| `docker-compose.yml` | Local Postgres 16, user/password/db all `talkpal`, port 5432, volume `pgdata` | | 5432 |
+| `docker-compose.yml` | Local MySQL 8, user/password/db all `talkpal` (root password `talkpal`), port 3306, volume `mysqldata` | | 3306 |
 
 Naming leftovers: npm packages are `talkpal-backend` / `talkpal-frontend`, DB credentials are `talkpal`, but the product, UI, `X-Title` header and localStorage key use "TalkMate". Do not rename these unless asked, since the DB credentials are baked into local volumes.
 
 ## Commands
 
 ```bash
-docker compose up -d                 # start Postgres (or point DATABASE_URL at any Postgres)
+docker compose up -d                 # start MySQL (or point DATABASE_URL at any MySQL 8 server)
 
 # backend/  (http://localhost:4000)
 npm install                          # postinstall runs `prisma generate`
@@ -65,7 +67,7 @@ Backend `.env` (git-ignored). The README says `cp .env.example .env`, but **ther
 
 | Var | Required | Notes |
 |---|---|---|
-| `DATABASE_URL` | yes | e.g. `postgresql://talkpal:talkpal@localhost:5432/talkmate` |
+| `DATABASE_URL` | yes | e.g. `mysql://talkpal:talkpal@localhost:3306/talkpal` (MySQL 8.0.13+; MariaDB is not supported because of the JSON default expressions) |
 | `JWT_SECRET` | yes | `getOrThrow`, so the app will not boot without it |
 | `OPENROUTER_API_KEY` | for `/ai/*` | missing key returns 503 "OPENROUTER_API_KEY is not set on the server" |
 | `OPENROUTER_MODEL` | no | default `openrouter/free` |
@@ -88,14 +90,14 @@ Backend `.env` (git-ignored). The README says `cp .env.example .env`, but **ther
 
 Frontend `.env.local` (git-ignored; there is **no `.env.local.example` in the repo either**, so create it by hand): `NEXT_PUBLIC_API_URL=http://localhost:4000`, `NEXT_PUBLIC_CHARACTER_PORTRAITS=1` (optional, see Characters Mode), and `NEXT_PUBLIC_GOOGLE_CLIENT_ID` (same value as the backend `GOOGLE_CLIENT_ID`; without it the login page shows a hint instead of the Google button).
 
-**Deployment** (as the code expects it): frontend on Vercel (`NEXT_PUBLIC_API_URL` must point at the API), API and PostgreSQL on Railway (`FRONTEND_URL` = the Vercel origin, `PUBLIC_API_URL` = the Railway URL, optionally a volume for photos). `npm run prisma:deploy` applies migrations in production.
+**Deployment** (as the code expects it): frontend on Vercel (`NEXT_PUBLIC_API_URL` must point at the API), API on Railway and MySQL on Hostinger (or any MySQL 8 host) (`FRONTEND_URL` = the Vercel origin, `PUBLIC_API_URL` = the Railway URL, optionally a volume for photos). `npm run prisma:deploy` applies migrations in production.
 
 ## Repository map
 
 ```
 backend/
   prisma/schema.prisma            20 models (see Database)
-  prisma/migrations/              27 folders, applied in name order (the list is below the tree)
+  prisma/migrations/              2 folders (`20261112000000_init_mysql` baseline, `20261112000100_content_builtin_data` seed), applied in name order
   src/main.ts                     bootstrap, body limit, CORS, static /media, ValidationPipe
   src/app.module.ts               ConfigModule (global), Throttler, HealthController (GET /health), all feature modules
   src/prisma/prisma.module.ts     global PrismaService (extends PrismaClient, connects on init)

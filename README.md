@@ -1,21 +1,23 @@
 # TalkMate
 
-- `backend/`  NestJS API: PostgreSQL (Prisma), JWT auth, OpenRouter free models
+- `backend/`  NestJS API: MySQL 8 (Prisma), JWT auth, OpenRouter free models
 - `frontend/` Next.js (App Router) + Tailwind dashboard
-- `docker-compose.yml`  local PostgreSQL 16
+- `docker-compose.yml`  local MySQL 8
 
 ## Run
 
 ```bash
-# 0. Database (needs Docker; or point DATABASE_URL at any PostgreSQL)
+# 0. Database (needs Docker; or point DATABASE_URL at any MySQL 8 server)
 docker compose up -d
 
 # 1. Backend (http://localhost:4000)
 cd backend
 cp .env.example .env      # set OPENROUTER_API_KEY and JWT_SECRET
 npm install               # also runs `prisma generate`
-npx prisma migrate dev --name init
+npx prisma migrate deploy   # creates the tables and loads the built-in content
 npm run start:dev
+# DATABASE_URL example: mysql://talkpal:talkpal@localhost:3306/talkpal
+# (`prisma migrate dev` also needs a user that may create a shadow database, e.g. root)
 
 # 2. Frontend (http://localhost:3000)
 cd frontend
