@@ -10,7 +10,10 @@ Living backlog. Agents: tick items as you finish them and add follow-ups you dis
 - [x] Remove the leftover PostgreSQL migrations
 
 ## Before go-live
-- [ ] Hostinger API: add `OPENROUTER_API_KEY`, `GMAIL_USER` + `GMAIL_APP_PASSWORD`, `GOOGLE_CLIENT_ID`, `PIXABAY_API_KEY`, `ADMIN_EMAILS` (without a mailer nobody can verify a sign-up); web: `NEXT_PUBLIC_GOOGLE_CLIENT_ID` + rebuild; add https://talkmate.edsol.academy to the Google OAuth JavaScript origins
+- [x] Hostinger: AI, Gmail, Google client ID, Pixabay keys and `ADMIN_EMAILS` copied from the dev env file (2026-11-12); web rebuilt with `NEXT_PUBLIC_GOOGLE_CLIENT_ID`
+- [ ] Add https://talkmate.edsol.academy to the Google OAuth client's Authorized JavaScript origins (Google Cloud console)
+- [ ] Replace the copied dev keys with separate production keys (OpenRouter, Gmail app password) — `docs/security.md` local vs production
+- [ ] Test a real sign-up on the live site (verification email arrives) and one AI mode
 - [ ] Hostinger: auto-deploy from Git (the repo is under FaisalAhmedRafi; connect it or transfer it), and enable daily backups
 - [ ] GitHub Actions do not run: the repo owner's account is locked for billing — fix it so CI can gate merges
 - [ ] Complete the *Go-live security checklist* in `docs/guides/deployment.md`
