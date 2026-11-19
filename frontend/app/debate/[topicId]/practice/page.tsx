@@ -387,7 +387,7 @@ function FeedbackEmpty() {
 
 function FeedbackList({ msgs, reviews, speaking, lang, learnerLang, onSpeak, onRetry, end }: {
   msgs: Msg[]; reviews: Record<number, Review>; speaking: string | null; lang: string; learnerLang: string;
-  onSpeak: (id: string, text: string) => void; onRetry: (i: number) => void; end: React.RefObject<HTMLDivElement>;
+  onSpeak: (id: string, text: string) => void; onRetry: (i: number) => void; end: React.RefObject<HTMLDivElement | null>;
 }) {
   return (
     <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">

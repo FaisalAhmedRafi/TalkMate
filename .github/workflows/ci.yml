@@ -1,0 +1,148 @@
+# CI — runs on every push to main and every pull request. Must stay green (AGENTS.md §2).
+# Deploys are done by the hosts (Vercel for frontend/, Railway for backend/), see
+# docs/guides/deployment.md, so this pipeline is the quality gate before merging.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    # gitleaks reads the PR's commit list on pull_request events (403 without this).
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  audit:
+    name: Dependency audit (${{ matrix.app }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [backend, frontend]
+    defaults:
+      run:
+        working-directory: ${{ matrix.app }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ${{ matrix.app }}/package-lock.json
+      - run: npm ci --ignore-scripts
+      - run: npm audit --omit=dev --audit-level=high
+
+  backend:
+    name: Backend — type-check, build, migrate & smoke test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: talkmate
+          MYSQL_USER: talkmate
+          MYSQL_PASSWORD: talkmate
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    env:
+      # Throwaway CI-only values — never real secrets. No AI, mail or photo keys.
+      DATABASE_URL: mysql://talkmate:talkmate@127.0.0.1:3306/talkmate
+      JWT_SECRET: ci-only-secret-0123456789abcdef0123456789abcdef
+      FRONTEND_URL: http://localhost:3000
+      PORT: '4000'
+      NODE_ENV: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci # postinstall runs `prisma generate`
+      - name: Type-check
+        run: npm run typecheck
+      - name: Build
+        run: npm run build
+      - name: Apply migrations (schema + built-in content)
+        run: npm run prisma:deploy
+      - name: Smoke test
+        run: |
+          npm run start:prod > api.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf http://localhost:4000/health >/dev/null && break; sleep 2; done
+          curl -sf http://localhost:4000/health | grep -q '"ok":true'
+          # Content was loaded from the database (the API refuses to start without it)
+          grep -q 'Content loaded: sentence 30' api.log
+          # Security headers present
+          curl -sI http://localhost:4000/health | grep -qi 'content-security-policy'
+          curl -sI http://localhost:4000/health | grep -qi 'strict-transport-security'
+          ! curl -sI http://localhost:4000/health | grep -qi 'x-powered-by'
+          # Protected routes need a token; admin routes too
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:4000/progress)" = "401"
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:4000/admin/overview)" = "401"
+          # Unknown login is a generic 401 (no account enumeration)
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:4000/auth/login \
+            -H 'content-type: application/json' -d '{"email":"nobody@example.com","password":"Wrong-pass-1"}')" = "401"
+          # Validation rejects junk input
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:4000/auth/login \
+            -H 'content-type: application/json' -d '{"email":"not-an-email"}')" = "400"
+      - name: API log
+        if: always()
+        run: cat api.log || true
+
+  frontend:
+    name: Frontend — type-check, build & smoke test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    env:
+      NEXT_PUBLIC_API_URL: http://localhost:4000
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: Type-check
+        run: npm run typecheck
+      - name: Build
+        run: npm run build
+      - name: Smoke test
+        run: |
+          npm start -- -p 3000 &
+          for i in $(seq 1 30); do curl -sf http://localhost:3000/login >/dev/null && break; sleep 2; done
+          curl -sf http://localhost:3000/login | grep -q '<html'
+          curl -sf http://localhost:3000/dashboard >/dev/null
+          # Security headers present
+          curl -sI http://localhost:3000/login | grep -qi 'content-security-policy'
+          curl -sI http://localhost:3000/login | grep -qi 'strict-transport-security'
+          curl -sI http://localhost:3000/login | grep -qi "x-frame-options: deny"
+          ! curl -sI http://localhost:3000/login | grep -qi 'x-powered-by'

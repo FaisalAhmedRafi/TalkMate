@@ -1,0 +1,7 @@
+{
+  "username": "u138423697",
+  "sites": [
+    { "domain": "talkmate.edsol.academy", "type": "nodejs", "directory": "frontend" },
+    { "domain": "talkmate-api.edsol.academy", "type": "nodejs", "directory": "backend", "entry_file": "dist/main.js" }
+  ]
+}

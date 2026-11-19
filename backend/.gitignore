@@ -1,5 +1,10 @@
 node_modules
 dist
+# Secrets stay out of git; .env.example is the template
 .env
-
+.env.*
+!.env.example
+# downloaded stock photos and uploaded pictures (MEDIA_DIR)
 media
+# a mis-named copy of .env must never be committed either
+env
